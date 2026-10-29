@@ -1,0 +1,113 @@
+<!doctype html>
+<html lang="en" data-composition-variables='[
+  {"id":"team","type":"string","label":"Team","default":"NEW ZEALAND"},
+  {"id":"runs","type":"number","label":"Runs","default":225},
+  {"id":"wickets","type":"string","label":"Wickets (blank if not said)","default":""},
+  {"id":"overs","type":"string","label":"Overs (blank if not said)","default":""},
+  {"id":"top_scorers","type":"string","label":"Top scorers JSON [{player,runs,balls?,not_out?}]","default":"[{\"player\":\"Glenn Phillips\",\"runs\":82,\"not_out\":true},{\"player\":\"Finn Allen\",\"runs\":45}]"},
+  {"id":"photo","type":"string","label":"Background photo","default":""},
+  {"id":"accent","type":"color","label":"Accent","default":"#FF7A1A"}
+]'>
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=__W__, height=__H__" />
+    <script src="https://cdn.jsdelivr.net/npm/gsap@3.14.2/dist/gsap.min.js"></script>
+    <link rel="stylesheet" href="assets/base.css" />
+    <style>
+      html, body { width: __W__px; height: __H__px; }
+      .head { position: absolute; text-align: center; }
+      .team { white-space: nowrap; letter-spacing: .1em; }
+      .total { display: flex; justify-content: center; align-items: baseline; }
+      .sub { letter-spacing: .1em; }
+      .rows { position: absolute; display: flex; flex-direction: column; }
+      .row { position: relative; overflow: hidden; display: flex; justify-content: space-between; align-items: center; }
+      .bar { position: absolute; left: 0; top: 0; bottom: 0; background: var(--accent); opacity: .3; transform-origin: 0 50%; }
+      .row .name, .row .score { position: relative; }
+      .row .score b { color: var(--accent); }
+
+      .portrait .head { left: 60px; right: 60px; top: 200px; }
+      .portrait .team { font-size: 70px; }
+      .portrait .total { font-size: 300px; }
+      .portrait .total .wk { font-size: 160px; }
+      .portrait .sub { font-size: 44px; }
+      .portrait .rows { left: 60px; right: 60px; top: 920px; gap: 22px; }
+      .portrait .row { padding: 26px 34px; }
+      .portrait .row .name { font-size: 50px; }
+      .portrait .row .score { font-size: 64px; }
+
+      .landscape .head { left: 100px; width: 760px; top: 220px; }
+      .landscape .team { font-size: 64px; }
+      .landscape .total { font-size: 280px; }
+      .landscape .total .wk { font-size: 150px; }
+      .landscape .sub { font-size: 40px; }
+      .landscape .rows { left: 960px; right: 100px; top: 260px; gap: 22px; }
+      .landscape .row { padding: 24px 32px; }
+      .landscape .row .name { font-size: 46px; }
+      .landscape .row .score { font-size: 60px; }
+    </style>
+  </head>
+  <body>
+    <div id="root" class="__ORIENT__" data-composition-id="main" data-start="0" data-duration="__DUR__"
+         data-width="__W__" data-height="__H__">
+      <div id="scene" class="scene clip" data-start="0" data-duration="__DUR__" data-track-index="0">
+        <div class="head" id="head">
+          <div class="team display accent shadow" id="team"></div>
+          <div class="total display shadow"><span id="runs">0</span><span class="wk muted" id="wk"></span></div>
+          <div class="sub muted" id="sub"></div>
+        </div>
+        <div class="rows" id="rows"></div>
+      </div>
+    </div>
+    <script src="assets/base.js"></script>
+    <script>
+      const v = HF.vars;
+      const dur = __DUR__;
+      const tl = gsap.timeline({ paused: true });
+      window.__timelines = window.__timelines || {};
+      window.__timelines["main"] = tl;
+
+      const fx = HF.backdrop(tl, { photo: v.photo, dur });
+      HF.$("#scene").appendChild(HF.$("#head"));
+      HF.$("#scene").appendChild(HF.$("#rows"));
+      HF.text("#team", v.team);
+      HF.text("#wk", String(v.wickets).trim() ? "/" + v.wickets : "");
+      HF.text("#sub", String(v.overs).trim() ? "IN " + v.overs + " OVERS" : "TOTAL");
+      const scorers = HF.list(v.top_scorers).slice(0, 3);
+      const max = Math.max(1, ...scorers.map((s) => Number(s.runs) || 0));
+      const rows = HF.$("#rows");
+      scorers.forEach((s) => {
+        const row = document.createElement("div");
+        row.className = "row panel";
+        const bar = document.createElement("div");
+        bar.className = "bar";
+        bar.dataset.fill = String((Number(s.runs) || 0) / max);
+        const name = document.createElement("div");
+        name.className = "name";
+        name.textContent = String(s.player || "").toUpperCase();
+        const score = document.createElement("div");
+        score.className = "score display";
+        score.append(String(s.runs ?? ""));
+        if (s.not_out) { const b = document.createElement("b"); b.textContent = "*"; score.append(b); }
+        if (s.balls) { const span = document.createElement("span"); span.className = "muted"; span.style.fontSize = ".6em"; span.textContent = " (" + s.balls + ")"; score.append(span); }
+        row.append(bar, name, score);
+        rows.appendChild(row);
+      });
+      HF.afterFonts(() => HF.fit(HF.$("#team")));
+
+      HF.flash(tl, fx, 0);
+      tl.from("#team", { y: -40, opacity: 0, duration: 0.4, ease: "power2.out" }, 0.15)
+        .from(".total", { scale: 1.5, opacity: 0, duration: 0.45, ease: "power4.out" }, 0.3)
+        .to("#runs", { innerText: v.runs, snap: { innerText: 1 }, duration: 1.2, ease: "power2.out" }, 0.35)
+        .from("#wk", { opacity: 0, duration: 0.3 }, 1.5)
+        .from("#sub", { opacity: 0, y: 20, duration: 0.3 }, 1.5);
+      HF.shake(tl, ".total", 1.55, 10);
+      tl.from(".row", { x: 120, opacity: 0, duration: 0.4, stagger: 0.2, ease: "power3.out" }, 1.4);
+      document.querySelectorAll(".bar").forEach((bar, i) => {
+        tl.fromTo(bar, { scaleX: 0 }, { scaleX: Number(bar.dataset.fill), duration: 0.8, ease: "power2.out" }, 1.6 + i * 0.2);
+      });
+      HF.sweep(tl, fx, 2.4);
+      tl.to("#scene", { opacity: 0, duration: 0.3 }, dur - 0.3);
+      tl.seek(0);
+    </script>
+  </body>
+</html>

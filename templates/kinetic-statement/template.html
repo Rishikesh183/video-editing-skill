@@ -1,0 +1,116 @@
+<!doctype html>
+<html lang="en" data-composition-variables='[
+  {"id":"kicker","type":"string","label":"Small label above","default":"REASON 1"},
+  {"id":"text","type":"string","label":"Statement (≤ 9 words)","default":"Teams now bat all the way down to number eight"},
+  {"id":"highlight","type":"string","label":"Word(s) to light up","default":"number eight"},
+  {"id":"photo","type":"string","label":"Background photo","default":""},
+  {"id":"cutouts","type":"string","label":"Player cut-outs (filled by the server)","default":"[]"},
+  {"id":"accent","type":"color","label":"Accent","default":"#FFD23F"},
+  {"id":"ground","type":"color","label":"Background tint","default":"#3A1C71"}
+]'>
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=__W__, height=__H__" />
+    <script src="https://cdn.jsdelivr.net/npm/gsap@3.14.2/dist/gsap.min.js"></script>
+    <link rel="stylesheet" href="assets/base.css" />
+    <style>
+      html, body { width: __W__px; height: __H__px; }
+      #root { background: #07050F; }
+      .sky { position: absolute; inset: 0; background: radial-gradient(90% 70% at 50% 40%, var(--ground) 0%, #07050F 78%); }
+      .band { position: absolute; width: 160%; left: -30%; background: linear-gradient(90deg, transparent, rgba(255,255,255,.07), transparent); }
+      .ringfx { position: absolute; border-radius: 50%; border: 3px solid var(--accent); opacity: 0; }
+      .block { position: absolute; }
+      .kicker { display: inline-block; font-family: "Inter"; font-weight: 800; letter-spacing: .3em; color: #111;
+        background: var(--accent); border-radius: 8px; }
+      .text { font-family: "Montserrat"; font-weight: 800; color: #fff; line-height: 1.08; }
+      .text .w { display: inline-block; margin-right: .22em; position: relative; }
+      .text .w.hot { color: var(--accent); }
+      .under { position: absolute; left: 0; right: 0; height: .12em; bottom: -.04em; background: var(--accent);
+        border-radius: .06em; transform-origin: 0 50%; }
+      .hero { position: absolute; }
+      .hero img { width: 100%; height: 100%; object-fit: contain; object-position: 50% 100%; display: block; }
+
+      .portrait .band { height: 220px; }
+      .portrait .block { left: 80px; right: 80px; top: 360px; }
+      .portrait.solo .block { top: 640px; }
+      .landscape.solo .block { right: 140px; top: 300px; }
+      .portrait .kicker { font-size: 28px; padding: 10px 18px; }
+      .portrait .text { margin-top: 40px; }
+      .portrait .ringfx { left: 140px; top: 520px; width: 800px; height: 800px; }
+      .portrait .hero { left: 140px; right: 140px; bottom: 0; height: 720px; }
+
+      .landscape .band { height: 160px; }
+      .landscape .block { left: 140px; right: 640px; top: 220px; }
+      .landscape .kicker { font-size: 24px; padding: 8px 16px; }
+      .landscape .text { margin-top: 30px; }
+      .landscape .ringfx { left: 260px; top: 140px; width: 800px; height: 800px; }
+      .landscape .hero { right: 40px; bottom: 0; width: 600px; height: 900px; }
+    </style>
+  </head>
+  <body>
+    <div id="root" class="__ORIENT__" data-composition-id="main" data-start="0" data-duration="__DUR__"
+         data-width="__W__" data-height="__H__">
+      <div id="scene" class="scene clip" data-start="0" data-duration="__DUR__" data-track-index="0">
+        <div class="sky" id="sky"></div>
+        <div class="band" id="b1"></div><div class="band" id="b2"></div>
+        <div class="ringfx" id="r1"></div><div class="ringfx" id="r2"></div>
+        <div class="hero" id="hero"></div>
+        <div class="block" id="block"><div class="kicker" id="kicker"></div><div class="text" id="text"></div></div>
+      </div>
+    </div>
+    <script src="assets/base.js"></script>
+    <script>
+      const v = HF.vars;
+      const dur = __DUR__;
+      const tl = gsap.timeline({ paused: true });
+      window.__timelines = window.__timelines || {};
+      window.__timelines["main"] = tl;
+
+      if (v.photo) HF.backdrop(tl, { photo: v.photo, dur });
+      const cuts = HF.list(v.cutouts).filter(Boolean);
+      if (cuts.length) { const img = document.createElement("img"); img.src = cuts[0]; HF.$("#hero").appendChild(img); }
+      else HF.$("#root").classList.add("solo");  // nothing below: the statement takes the centre
+
+      HF.text("#kicker", String(v.kicker || "").toUpperCase());
+      if (!v.kicker) HF.$("#kicker").style.display = "none";
+      const words = String(v.text || "").split(/\s+/).filter(Boolean).slice(0, 12);
+      const hot = String(v.highlight || "").toLowerCase().split(/\s+/).filter(Boolean);
+      const text = HF.$("#text");
+      // Big and few: size from the longest word and the total length so it always fits the block.
+      const blockW = HF.portrait ? 920 : 1140, maxPx = HF.portrait ? 120 : 110;
+      text.style.fontSize = HF.blockSize(words.join(" "), blockW, cuts.length ? (HF.portrait ? 520 : 600) : 760, maxPx, 0.66, 1.08) + "px";
+      const els = words.map((w) => {
+        const s = document.createElement("span"); s.className = "w"; s.textContent = w;
+        if (hot.includes(w.toLowerCase().replace(/[^a-z0-9.]/g, ""))) s.classList.add("hot");
+        text.appendChild(s);
+        return s;
+      });
+      const hots = els.filter((e) => e.classList.contains("hot"));
+      hots.forEach((e) => { const u = document.createElement("i"); u.className = "under"; e.appendChild(u); });
+
+      // Background: two soft light bands drift across, the world moving behind still type.
+      const H = HF.$("#root").clientHeight || 1920;
+      gsap.set("#b1", { y: H * 0.18, rotation: -12 });
+      gsap.set("#b2", { y: H * 0.62, rotation: -12 });
+      tl.fromTo("#b1", { x: -400 }, { x: 400, duration: dur, ease: "none" }, 0)
+        .fromTo("#b2", { x: 300 }, { x: -300, duration: dur, ease: "none" }, 0);
+
+      // Shared with sound cues (hfpipe/cues.py "kinetic-statement").
+      const T_WORDS = 0.35, STEP = Math.min(0.11, (dur - 2.2) / Math.max(1, words.length));
+      tl.from("#kicker", { x: -40, opacity: 0, duration: 0.5, ease: "expo.out" }, 0.1);
+      els.forEach((e, i) => {
+        tl.fromTo(e, { opacity: 0, y: 30, filter: "blur(10px)" }, { opacity: 1, y: 0, filter: "blur(0px)", duration: 0.5, ease: "expo.out", immediateRender: true }, T_WORDS + i * STEP);
+      });
+      const land = T_WORDS + words.length * STEP + 0.15;
+      if (hots.length) {
+        tl.from(hots.map((e) => e.querySelector(".under")), { scaleX: 0, duration: 0.45, ease: "expo.out", stagger: 0.06 }, land)
+          .fromTo(hots, { scale: 1 }, { scale: 1.08, duration: 0.16, ease: "power2.out", yoyo: true, repeat: 1, immediateRender: false }, land);
+      }
+      tl.fromTo("#r1", { scale: 0.4, opacity: 0.7 }, { scale: 1.3, opacity: 0, duration: 1.0, ease: "power2.out", immediateRender: false }, land)
+        .fromTo("#r2", { scale: 0.4, opacity: 0.5 }, { scale: 1.6, opacity: 0, duration: 1.2, ease: "power2.out", immediateRender: false }, land + 0.12);
+      if (cuts.length) tl.from("#hero", { y: 420, opacity: 0, duration: 0.9, ease: "expo.out" }, 0.25);
+      tl.to("#scene", { opacity: 0, duration: 0.25, ease: "power2.in" }, dur - 0.25);
+      tl.seek(0);
+    </script>
+  </body>
+</html>

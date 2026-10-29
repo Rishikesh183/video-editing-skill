@@ -1,0 +1,113 @@
+<!doctype html>
+<html lang="en" data-composition-variables='[
+  {"id":"text","type":"string","label":"Text","default":"ALMOST 300 OVERS. NEVER A NO-BALL."},
+  {"id":"style","type":"string","label":"Style: typewriter | slam | countup","default":"typewriter"},
+  {"id":"photo","type":"string","label":"Background photo","default":""},
+  {"id":"accent","type":"color","label":"Accent","default":"#FF7A1A"}
+]'>
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=__W__, height=__H__" />
+    <script src="https://cdn.jsdelivr.net/npm/gsap@3.14.2/dist/gsap.min.js"></script>
+    <link rel="stylesheet" href="assets/base.css" />
+    <style>
+      html, body { width: __W__px; height: __H__px; }
+      .safe { display: flex; align-items: center; justify-content: center; }
+      .words { text-align: center; line-height: 1.08; }
+      .w { display: inline-block; margin: 0 .12em; }
+      .w.num { color: var(--accent); }
+      .c { display: inline-block; white-space: pre; }
+      .caret { display: inline-block; width: .08em; height: .9em; margin-left: .06em; background: var(--accent); vertical-align: -0.08em; }
+      .typewriter .words { text-align: left; }
+    </style>
+  </head>
+  <body>
+    <div id="root" class="__ORIENT__" data-composition-id="main" data-start="0" data-duration="__DUR__"
+         data-width="__W__" data-height="__H__">
+      <div id="scene" class="scene clip" data-start="0" data-duration="__DUR__" data-track-index="0">
+        <div class="safe" id="safe"><div class="words display shadow" id="words"></div></div>
+      </div>
+    </div>
+    <script src="assets/base.js"></script>
+    <script>
+      const v = HF.vars;
+      const dur = __DUR__;
+      const tl = gsap.timeline({ paused: true });
+      window.__timelines = window.__timelines || {};
+      window.__timelines["main"] = tl;
+
+      const style = ["slam", "countup", "typewriter"].includes(v.style) ? v.style : "typewriter";
+      HF.$("#root").classList.add(style);
+      const fx = HF.backdrop(tl, { photo: v.photo, dur });
+      HF.$("#scene").appendChild(HF.$("#safe"));
+      const box = HF.$("#words");
+      const text = String(v.text).toUpperCase().replace(/\s+/g, " ").trim();
+      const words = text.split(" ").filter(Boolean);
+      box.style.fontSize = HF.blockSize(text, HF.portrait ? 960 : 1720, HF.portrait ? 1320 : 790, HF.portrait ? 170 : 150) + "px";
+
+      if (style === "typewriter") {
+        // Timing shared with the server's sound cues: char i appears at 0.3 + i * step.
+        const step = Math.min(0.055, (dur - 1.6) / Math.max(1, text.length));
+        let i = 0;
+        const chars = [];
+        words.forEach((word, wi) => {
+          const span = document.createElement("span");
+          span.className = "w" + (/\d/.test(word) ? " num" : "");
+          span.style.margin = "0";
+          for (const ch of word + (wi < words.length - 1 ? " " : "")) {
+            const c = document.createElement("span");
+            c.className = "c";
+            c.textContent = ch;
+            span.appendChild(c);
+            chars.push([c, i++]);
+          }
+          box.appendChild(span);
+        });
+        const caret = document.createElement("span");
+        caret.className = "caret";
+        box.appendChild(caret);
+        chars.forEach(([c, k]) => tl.from(c, { opacity: 0, duration: 0.01, ease: "none" }, 0.3 + k * step));
+        const typed = 0.3 + text.length * step;
+        // Hidden characters still take space, so the caret only appears once the line is typed.
+        tl.fromTo(caret, { opacity: 0 }, { opacity: 1, duration: 0.01, ease: "none" }, typed - 0.01);
+        tl.to(caret, { opacity: 0, duration: 0.01, repeat: Math.max(1, Math.floor((dur - typed) / 0.25)), yoyo: true, repeatDelay: 0.24, ease: "none" }, typed);
+        HF.sweep(tl, fx, typed + 0.1);
+      } else {
+        const spans = words.map((word) => {
+          const span = document.createElement("span");
+          span.className = "w" + (/\d/.test(word) ? " num" : "");
+          span.textContent = word;
+          box.appendChild(span);
+          box.append(" ");
+          return span;
+        });
+        if (style === "slam") {
+          // Shared with sound cues: word i starts at 0.15 + i * step and lands 0.22 s later.
+          const step = Math.min(0.32, (dur - 1.2) / Math.max(1, spans.length));
+          spans.forEach((s, i) => {
+            const at = 0.15 + i * step;
+            tl.from(s, { scale: 3, opacity: 0, duration: 0.22, ease: "power4.in" }, at);
+            if (s.classList.contains("num")) { HF.flash(tl, fx, at + 0.22, 0.5); HF.shake(tl, "#scene", at + 0.22, 14); }
+          });
+        } else {
+          tl.from(spans, { y: 60, opacity: 0, duration: 0.35, stagger: 0.08, ease: "power3.out" }, 0.15);
+          spans.forEach((s) => {
+            const m = s.textContent.match(/^(\D*)([\d,]+)(\D*)$/);
+            if (!m) return;
+            const target = Number(m[2].replace(/,/g, ""));
+            const num = document.createElement("span");
+            num.textContent = "0";
+            s.textContent = "";
+            s.append(m[1], num, m[3]);
+            tl.to(num, { innerText: target, snap: { innerText: 1 }, duration: Math.min(1.5, dur / 3), ease: "power2.out" }, 0.4);
+          });
+          HF.shake(tl, "#words", 0.4 + Math.min(1.5, dur / 3), 10);
+        }
+      }
+      HF.flash(tl, fx, 0, 0.6);
+      tl.fromTo("#words", { scale: 1 }, { scale: 1.04, duration: dur - 0.3, ease: "none" }, 0)
+        .to("#scene", { opacity: 0, duration: 0.3 }, dur - 0.3);
+      tl.seek(0);
+    </script>
+  </body>
+</html>

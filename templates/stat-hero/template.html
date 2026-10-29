@@ -1,0 +1,198 @@
+<!doctype html>
+<html lang="en" data-composition-variables='[
+  {"id":"kicker","type":"string","label":"Small label above the title","default":"YESTERDAY"},
+  {"id":"title","type":"string","label":"Title","default":"Sri Lanka chased it down"},
+  {"id":"value","type":"number","label":"The number","default":430},
+  {"id":"prefix","type":"string","label":"Before the number","default":""},
+  {"id":"suffix","type":"string","label":"After the number","default":""},
+  {"id":"label","type":"string","label":"What the number counts","default":"RUNS CHASED"},
+  {"id":"of","type":"number","label":"Ring full at (0 = full ring)","default":0},
+  {"id":"facts","type":"string","label":"Fact chips (JSON list or a | b | c)","default":"[\"49.2 overs\",\"8.7 runs an over\",\"Their highest ever chase\"]"},
+  {"id":"cutouts","type":"string","label":"Player cut-outs (filled by the server)","default":"[]"},
+  {"id":"accent","type":"color","label":"Accent","default":"#FFD23F"},
+  {"id":"ground","type":"color","label":"Background tint","default":"#13245E"}
+]'>
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=__W__, height=__H__" />
+    <script src="https://cdn.jsdelivr.net/npm/gsap@3.14.2/dist/gsap.min.js"></script>
+    <link rel="stylesheet" href="assets/base.css" />
+    <style>
+      html, body { width: __W__px; height: __H__px; }
+      #root { background: #050916; }
+      .sky { position: absolute; inset: 0;
+        background:
+          radial-gradient(55% 35% at 20% 0%, rgba(140,170,255,.22), transparent 70%),
+          radial-gradient(55% 35% at 80% 0%, rgba(140,170,255,.18), transparent 70%),
+          radial-gradient(85% 65% at 50% 48%, var(--ground) 0%, #050916 78%); }
+      .dust { position: absolute; border-radius: 50%; background: #fff; }
+      .head { position: absolute; }
+      .kicker { font-family: "Inter"; font-weight: 700; letter-spacing: .32em; color: var(--accent); }
+      .title { font-family: "Montserrat"; font-weight: 800; line-height: 1.05; color: #fff; }
+      .title .w { display: inline-block; margin-right: .24em; }
+      .dial { position: absolute; }
+      .dial svg { position: absolute; inset: 0; overflow: visible; }
+      .num { position: absolute; left: 0; right: 0; text-align: center; font-family: "Archivo Black"; color: #fff;
+        font-variant-numeric: tabular-nums; line-height: 1; white-space: nowrap; }
+      .num .fix { color: var(--accent); }
+      .lab { position: absolute; left: 0; right: 0; text-align: center; font-family: "Inter"; font-weight: 800;
+        letter-spacing: .22em; color: rgba(255,255,255,.75); }
+      .chips { position: absolute; display: flex; flex-direction: column; }
+      .chip { display: flex; align-items: center; font-family: "Montserrat"; font-weight: 700; color: #fff;
+        background: rgba(255,255,255,.07); border: 2px solid rgba(255,255,255,.12); border-radius: 18px; }
+      .chip i { flex: none; border-radius: 50%; background: var(--accent); }
+      .hero { position: absolute; }
+      .hero img { width: 100%; height: 100%; object-fit: contain; object-position: 50% 100%; display: block; }
+      .flare { position: absolute; border-radius: 50%; background: radial-gradient(circle, rgba(255,210,63,.45), transparent 65%); }
+
+      .portrait .head { left: 80px; right: 80px; top: 150px; }
+      .portrait .kicker { font-size: 30px; }
+      .portrait .title { font-size: 72px; margin-top: 18px; }
+      .portrait .dial { left: 190px; top: 520px; width: 700px; height: 700px; }
+      .portrait .num { top: 250px; font-size: 190px; }
+      .portrait .lab { top: 470px; font-size: 30px; }
+      .portrait .flare { left: 40px; top: 370px; width: 1000px; height: 1000px; }
+      .portrait .chips { left: 90px; right: 90px; top: 1330px; gap: 22px; }
+      .portrait .chip { font-size: 40px; padding: 24px 32px; gap: 24px; }
+      .portrait .chip i { width: 18px; height: 18px; }
+      .portrait.has-hero .chips { right: 470px; }
+      .portrait.has-hero .chip { font-size: 34px; padding: 20px 26px; }
+      .portrait .hero { right: -40px; bottom: 0; width: 560px; height: 760px; }
+
+      .landscape .head { left: 120px; right: 820px; top: 120px; }
+      .landscape .kicker { font-size: 26px; }
+      .landscape .title { font-size: 66px; margin-top: 14px; }
+      .landscape .dial { left: 130px; top: 360px; width: 620px; height: 620px; }
+      .landscape .num { top: 220px; font-size: 168px; }
+      .landscape .lab { top: 415px; font-size: 26px; }
+      .landscape .flare { left: -20px; top: 210px; width: 920px; height: 920px; }
+      .landscape .chips { left: 860px; width: 560px; top: 420px; gap: 22px; }
+      .landscape .chip { font-size: 36px; padding: 22px 30px; gap: 22px; }
+      .landscape .chip i { width: 16px; height: 16px; }
+      .landscape .hero { right: 0; bottom: 0; width: 520px; height: 900px; }
+    </style>
+  </head>
+  <body>
+    <div id="root" class="__ORIENT__" data-composition-id="main" data-start="0" data-duration="__DUR__"
+         data-width="__W__" data-height="__H__">
+      <div id="scene" class="scene clip" data-start="0" data-duration="__DUR__" data-track-index="0">
+        <div class="sky"></div>
+        <div id="dustbox"></div>
+        <div class="flare" id="flare"></div>
+        <div class="hero" id="hero"></div>
+        <div class="head"><div class="kicker" id="kicker"></div><div class="title" id="title"></div></div>
+        <div class="dial" id="dial">
+          <svg viewBox="-120 -120 240 240">
+            <circle r="100" fill="none" stroke="rgba(255,255,255,.09)" stroke-width="7" />
+            <circle id="arc" r="100" fill="none" stroke-width="7" stroke-linecap="round" transform="rotate(-90)"
+                    style="stroke: var(--accent)" />
+            <g id="ticks"></g>
+          </svg>
+          <div class="num" id="num"></div>
+          <div class="lab" id="lab"></div>
+        </div>
+        <div class="chips" id="chips"></div>
+      </div>
+    </div>
+    <script src="assets/base.js"></script>
+    <script>
+      const v = HF.vars;
+      const dur = __DUR__;
+      const tl = gsap.timeline({ paused: true });
+      window.__timelines = window.__timelines || {};
+      window.__timelines["main"] = tl;
+      const NS = "http://www.w3.org/2000/svg";
+      const root = HF.$("#root");
+      const W = root.clientWidth || 1080, H = root.clientHeight || 1920;
+
+      // Seeded drifting dust: the world behind keeps moving while the number holds still.
+      let seed = 7;
+      const rnd = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
+      for (let i = 0; i < 34; i++) {
+        const d = document.createElement("div");
+        d.className = "dust";
+        const s = 2 + rnd() * 5;
+        Object.assign(d.style, { width: s + "px", height: s + "px", left: rnd() * W + "px", top: rnd() * H + "px", opacity: 0.08 + rnd() * 0.3 });
+        HF.$("#dustbox").appendChild(d);
+        tl.to(d, { y: -(60 + rnd() * 160), x: (rnd() - 0.5) * 60, duration: dur, ease: "none" }, 0);
+      }
+
+      HF.text("#kicker", String(v.kicker || "").toUpperCase());
+      String(v.title || "").split(/\s+/).filter(Boolean).forEach((w) => {
+        const s = document.createElement("span"); s.className = "w"; s.textContent = w; HF.$("#title").appendChild(s);
+      });
+      HF.text("#lab", String(v.label || "").toUpperCase());
+      const value = Number(v.value) || 0;
+      const decimals = Number.isInteger(value) ? 0 : 1;
+      const num = HF.$("#num");
+      const show = (n) => {
+        num.innerHTML = "";
+        const pre = document.createElement("span"); pre.className = "fix"; pre.textContent = v.prefix || "";
+        const mid = document.createElement("span"); mid.textContent = n.toFixed(decimals);
+        const suf = document.createElement("span"); suf.className = "fix"; suf.textContent = v.suffix || "";
+        num.append(pre, mid, suf);
+      };
+      show(0);
+      // Archivo Black digits are ~0.72 em wide: size the number from its length so it always fits the dial.
+      const chars = (String(v.prefix || "") + value.toFixed(decimals) + String(v.suffix || "")).length;
+      const dialW = HF.portrait ? 700 : 620;
+      const fs = Math.min(HF.portrait ? 190 : 168, Math.floor(dialW * 0.78 / (chars * 0.72)));
+      num.style.fontSize = fs + "px";
+      num.style.top = Math.round(dialW / 2 - fs * 0.62) + "px";  // optically centred, label below
+
+      // Tick marks around the dial (the face of a gauge), lit in sequence as the arc passes.
+      const ticks = [];
+      for (let i = 0; i < 48; i++) {
+        const a = (i / 48) * Math.PI * 2 - Math.PI / 2;
+        const t = document.createElementNS(NS, "line");
+        const r1 = i % 4 === 0 ? 108 : 110, r2 = 116;
+        t.setAttribute("x1", r1 * Math.cos(a)); t.setAttribute("y1", r1 * Math.sin(a));
+        t.setAttribute("x2", r2 * Math.cos(a)); t.setAttribute("y2", r2 * Math.sin(a));
+        t.setAttribute("stroke", "#fff"); t.setAttribute("stroke-width", i % 4 === 0 ? "1.6" : ".8");
+        t.setAttribute("opacity", ".18");
+        HF.$("#ticks").appendChild(t);
+        ticks.push(t);
+      }
+      const arc = HF.$("#arc");
+      const C = 2 * Math.PI * 100;
+      const share = Number(v.of) > 0 ? Math.min(1, value / Number(v.of)) : 1;
+      arc.setAttribute("stroke-dasharray", `${C} ${C}`);
+      const prog = { p: 0 };
+      const paint = () => {
+        arc.setAttribute("stroke-dashoffset", C * (1 - prog.p * share));
+        show(value * prog.p);
+        const lit = Math.floor(prog.p * share * ticks.length);
+        ticks.forEach((t, i) => t.setAttribute("opacity", i < lit ? ".85" : ".18"));
+      };
+      paint();
+
+      const cuts = HF.list(v.cutouts).filter(Boolean);
+      if (cuts.length) {
+        root.classList.add("has-hero");
+        const img = document.createElement("img"); img.src = cuts[0]; HF.$("#hero").appendChild(img);
+      }
+      const facts = HF.list(v.facts).map(String).filter(Boolean).slice(0, 3);
+      facts.forEach((f) => {
+        const c = document.createElement("div"); c.className = "chip";
+        c.innerHTML = "<i></i><span></span>"; c.querySelector("span").textContent = f;
+        HF.$("#chips").appendChild(c);
+      });
+
+      // Shared with sound cues (hfpipe/cues.py "stat-hero").
+      const T_RING = 0.6, COUNT = 1.4, LAND = T_RING + COUNT;
+      tl.from("#kicker", { y: -20, opacity: 0, duration: 0.5, ease: "expo.out" }, 0.1)
+        .from("#title .w", { opacity: 0, y: 28, duration: 0.55, ease: "expo.out", stagger: 0.08 }, 0.2)
+        .from("#dial", { scale: 0.8, opacity: 0, duration: 0.8, ease: "expo.out" }, 0.35)
+        .to(prog, { p: 1, duration: COUNT, ease: "power3.out", onUpdate: paint }, T_RING)
+        .from("#lab", { opacity: 0, y: 16, duration: 0.5, ease: "expo.out" }, LAND - 0.2)
+        .fromTo("#num", { scale: 1 }, { scale: 1.1, duration: 0.16, ease: "power2.out", yoyo: true, repeat: 1, immediateRender: false }, LAND)
+        .fromTo("#flare", { opacity: 0, scale: 0.6 }, { opacity: 1, scale: 1.1, duration: 0.5, ease: "expo.out", immediateRender: false }, LAND)
+        .to("#flare", { opacity: 0.35, duration: 0.8, ease: "power2.inOut" }, LAND + 0.5);
+      if (cuts.length) tl.from("#hero", { y: 500, opacity: 0, duration: 0.9, ease: "expo.out" }, 0.45);
+      tl.from(".chip", { y: 40, opacity: 0, duration: 0.55, ease: "expo.out", stagger: 0.12 }, LAND + 0.15);
+      tl.set("#flare", { opacity: 0 }, 0);
+      tl.to("#scene", { opacity: 0, duration: 0.25, ease: "power2.in" }, dur - 0.25);
+      tl.seek(0);
+    </script>
+  </body>
+</html>

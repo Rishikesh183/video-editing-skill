@@ -1,0 +1,65 @@
+/* Shared look for every cricket template. Copied into each build as assets/base.css. */
+@font-face { font-family: "Anton"; src: url("fonts/Anton-Regular.ttf"); }
+@font-face { font-family: "Barlow"; src: url("fonts/BarlowCondensed-Bold.ttf"); font-weight: 700; }
+@font-face { font-family: "NotoTelugu"; src: url("fonts/NotoSansTelugu.ttf"); }
+
+:root {
+  --ground: #0B1026;
+  --ground-hi: #1E2A66;
+  --panel: rgba(16, 22, 52, .82);
+  --ink: #FFFFFF;
+  --muted: #A9B1D6;
+  --accent: #FF7A1A;
+}
+* { margin: 0; padding: 0; box-sizing: border-box; }
+html, body { overflow: hidden; background: var(--ground); }
+#root {
+  position: relative; width: 100%; height: 100%; overflow: hidden;
+  font-family: "Barlow", "NotoTelugu", sans-serif; color: var(--ink);
+  background: radial-gradient(circle at 50% 30%, var(--ground-hi) 0%, var(--ground) 65%);
+}
+.scene { position: absolute; inset: 0; }
+.display { font-family: "Anton", "NotoTelugu", sans-serif; line-height: 1; letter-spacing: .02em; text-transform: uppercase; }
+.headline, .tagline { text-transform: uppercase; }
+.te { font-family: "NotoTelugu", sans-serif; }
+.accent { color: var(--accent); }
+.muted { color: var(--muted); }
+.panel { background: var(--panel); border: 3px solid rgba(255,255,255,.10); border-radius: 28px; backdrop-filter: blur(6px); }
+.shadow { text-shadow: 0 6px 30px rgba(0,0,0,.55); }
+.stripe {
+  position: absolute; left: -10%; width: 120%; height: 18px;
+  background: var(--accent); opacity: .9; transform: rotate(-8deg);
+}
+.landscape .stripe { transform: rotate(-3deg); }
+
+/* ---- Background stack (built by HF.backdrop) ---- */
+.bg { position: absolute; inset: -6%; overflow: hidden; }
+.bg img { width: 100%; height: 100%; object-fit: cover; object-position: 50% 25%; display: block; }
+.bg.photo img { filter: blur(14px) brightness(.5) saturate(1.25); }
+.bg.photo.sharp img { filter: brightness(.82) saturate(1.1); }
+.bg .tint { position: absolute; inset: 0; mix-blend-mode: multiply;
+  background: linear-gradient(160deg, var(--accent) 0%, var(--ground) 70%); opacity: .55; }
+.bg.plain { background: radial-gradient(circle at 30% 20%, var(--ground-hi), var(--ground) 60%); }
+.bg .orb { position: absolute; width: 70%; height: 70%; border-radius: 50%;
+  background: radial-gradient(circle, var(--accent) 0%, transparent 65%); opacity: .28; }
+.grain { position: absolute; inset: -50%; pointer-events: none; opacity: .13; mix-blend-mode: overlay;
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='220' height='220'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='2' stitchTiles='stitch'/></filter><rect width='100%' height='100%' filter='url(%23n)'/></svg>"); }
+.vignette { position: absolute; inset: 0; pointer-events: none;
+  background: radial-gradient(ellipse at 50% 45%, transparent 45%, rgba(0,0,0,.7) 100%); }
+.sweep { position: absolute; top: -20%; bottom: -20%; left: 0; width: 35%; pointer-events: none; opacity: .0;
+  background: linear-gradient(100deg, transparent, rgba(255,255,255,.28), transparent); transform: skewX(-12deg); }
+.flash { position: absolute; inset: 0; background: #fff; opacity: 0; pointer-events: none; }
+.leak { position: absolute; inset: -20%; pointer-events: none; opacity: 0; mix-blend-mode: screen;
+  background: radial-gradient(circle at 15% 30%, rgba(255,170,60,.9), transparent 45%), radial-gradient(circle at 85% 70%, rgba(255,80,40,.7), transparent 40%); }
+
+/* ---- Photos ---- */
+.photo-frame { position: relative; overflow: hidden; border-radius: 32px; border: 6px solid var(--accent); background: var(--panel); }
+.photo-frame img { width: 100%; height: 100%; object-fit: cover; object-position: 50% 20%; display: block; }
+.monogram { width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; color: var(--muted); }
+.cutout { position: absolute; pointer-events: none; filter: drop-shadow(0 20px 40px rgba(0,0,0,.6)); }
+.cutout img { width: 100%; height: 100%; object-fit: contain; object-position: 50% 100%; display: block; }
+.cutout .rim { position: absolute; inset: 0; }
+
+/* Captions from the phone app sit in the bottom band; templates keep it empty. */
+.portrait .safe { position: absolute; left: 60px; right: 60px; top: 120px; bottom: 480px; }
+.landscape .safe { position: absolute; left: 100px; right: 100px; top: 70px; bottom: 220px; }

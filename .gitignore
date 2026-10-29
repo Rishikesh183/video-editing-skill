@@ -1,0 +1,16 @@
+data/
+builds/
+out/
+backups/
+server/.venv/
+validator/build/
+validator/.gradle/
+validator/.kotlin/
+__pycache__/
+*.mp4
+*.m4a
+*.srt
+.env
+*firebase*.json
+*service-account*.json
+.mp4

@@ -1,0 +1,118 @@
+<!doctype html>
+<html lang="en" data-composition-variables='[
+  {"id":"kicker","type":"string","label":"Small label above the title","default":"HOW WE GOT HERE"},
+  {"id":"title","type":"string","label":"Title","default":"The rise of 400+ totals"},
+  {"id":"points","type":"string","label":"Points: JSON [{\"when\":..,\"text\":..}] or 2006: text | 2024: text","default":"[{\"when\":\"2006\",\"text\":\"First 400 in ODIs\"},{\"when\":\"2015\",\"text\":\"Powerplay rules change\"},{\"when\":\"2024\",\"text\":\"Impact player arrives\"},{\"when\":\"2025\",\"text\":\"Sri Lanka chase 430\"}]"},
+  {"id":"highlight","type":"string","label":"Point to light up (its when)","default":"2025"},
+  {"id":"accent","type":"color","label":"Accent","default":"#FFD23F"}
+]'>
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=__W__, height=__H__" />
+    <script src="https://cdn.jsdelivr.net/npm/gsap@3.14.2/dist/gsap.min.js"></script>
+    <link rel="stylesheet" href="assets/base.css" />
+    <style>
+      html, body { width: __W__px; height: __H__px; }
+      #root { background: #0A0718; }
+      .sky { position: absolute; inset: 0;
+        background:
+          radial-gradient(60% 40% at 80% 10%, rgba(150,90,255,.28), transparent 70%),
+          radial-gradient(90% 70% at 40% 60%, #1C1240 0%, #0A0718 75%); }
+      .head { position: absolute; }
+      .kicker { font-family: "Inter"; font-weight: 700; letter-spacing: .32em; color: var(--accent); }
+      .title { font-family: "Montserrat"; font-weight: 800; line-height: 1.05; color: #fff; }
+      .title .w { display: inline-block; margin-right: .24em; }
+      .axis { position: absolute; background: rgba(255,255,255,.25); }
+      .fill { position: absolute; inset: 0; background: var(--accent); }
+      .pt { position: absolute; }
+      .dot { position: absolute; border-radius: 50%; background: #0A0718; border: 5px solid #fff; }
+      .pt.hot .dot { background: var(--accent); border-color: var(--accent); box-shadow: 0 0 30px rgba(255,210,63,.6); }
+      .when { position: absolute; font-family: "Archivo Black"; color: #fff; white-space: nowrap; }
+      .pt.hot .when { color: var(--accent); }
+      .what { position: absolute; font-family: "Montserrat"; font-weight: 700; color: rgba(255,255,255,.8); line-height: 1.15; }
+      .pt.hot .what { color: #fff; }
+
+      .portrait .head { left: 80px; right: 80px; top: 200px; }
+      .portrait .kicker { font-size: 30px; }
+      .portrait .title { font-size: 74px; margin-top: 20px; }
+      .portrait .axis { left: 150px; width: 8px; top: 600px; height: 1120px; }
+      .portrait .fill { transform-origin: 50% 0; }
+      .portrait .dot { width: 40px; height: 40px; left: -17px; top: -20px; }
+      .portrait .when { left: 56px; top: -44px; font-size: 68px; }
+      .portrait .what { left: 56px; top: 38px; width: 780px; font-size: 46px; }
+
+      .landscape .head { left: 140px; right: 140px; top: 110px; }
+      .landscape .kicker { font-size: 26px; }
+      .landscape .title { font-size: 72px; margin-top: 14px; }
+      .landscape .axis { top: 600px; height: 8px; left: 200px; width: 1520px; }
+      .landscape .fill { transform-origin: 0 50%; }
+      .landscape .dot { width: 40px; height: 40px; left: -20px; top: -17px; }
+      .landscape .when { left: -140px; width: 280px; text-align: center; top: -120px; font-size: 64px; }
+      .landscape .what { left: -180px; width: 360px; text-align: center; top: 56px; font-size: 38px; }
+    </style>
+  </head>
+  <body>
+    <div id="root" class="__ORIENT__" data-composition-id="main" data-start="0" data-duration="__DUR__"
+         data-width="__W__" data-height="__H__">
+      <div id="scene" class="scene clip" data-start="0" data-duration="__DUR__" data-track-index="0">
+        <div class="sky"></div>
+        <div class="head"><div class="kicker" id="kicker"></div><div class="title" id="title"></div></div>
+        <div class="axis" id="axis"><div class="fill" id="fill"></div></div>
+      </div>
+    </div>
+    <script src="assets/base.js"></script>
+    <script>
+      const v = HF.vars;
+      const dur = __DUR__;
+      const tl = gsap.timeline({ paused: true });
+      window.__timelines = window.__timelines || {};
+      window.__timelines["main"] = tl;
+
+      const points = HF.list(v.points).map((p) => {
+        if (typeof p === "object" && p) return { when: String(p.when || ""), text: String(p.text || "") };
+        const i = String(p).indexOf(":");
+        return i < 0 ? { when: String(p), text: "" } : { when: String(p).slice(0, i).trim(), text: String(p).slice(i + 1).trim() };
+      }).filter((p) => p.when).slice(0, 5);
+      const hotWhen = String(v.highlight || "").trim().toLowerCase();
+
+      HF.text("#kicker", String(v.kicker || "").toUpperCase());
+      String(v.title || "").split(/\s+/).filter(Boolean).forEach((w) => {
+        const s = document.createElement("span"); s.className = "w"; s.textContent = w; HF.$("#title").appendChild(s);
+      });
+      const axis = HF.$("#axis");
+      const n = Math.max(1, points.length);
+      const built = points.map((p, i) => {
+        const pt = document.createElement("div");
+        pt.className = "pt" + (p.when.toLowerCase() === hotWhen ? " hot" : "");
+        const pos = n === 1 ? 0.5 : 0.08 + 0.84 * i / (n - 1);
+        if (HF.portrait) { pt.style.left = "3px"; pt.style.top = (pos * 100).toFixed(2) + "%"; }
+        else { pt.style.top = "3px"; pt.style.left = (pos * 100).toFixed(2) + "%"; }
+        pt.innerHTML = '<div class="dot"></div><div class="when"></div><div class="what"></div>';
+        pt.querySelector(".when").textContent = p.when;
+        pt.querySelector(".what").textContent = p.text;
+        axis.appendChild(pt);
+        return { pt, pos };
+      });
+
+      // Shared with sound cues (hfpipe/cues.py "timeline").
+      const T_LINE = 0.6, DRAW = Math.min(2.4, Math.max(1.2, dur - 2.2));
+      tl.from("#kicker", { y: -20, opacity: 0, duration: 0.5, ease: "expo.out" }, 0.1)
+        .from("#title .w", { opacity: 0, y: 26, duration: 0.55, ease: "expo.out", stagger: 0.08 }, 0.2)
+        .from("#axis", { opacity: 0, duration: 0.4 }, 0.4)
+        .from("#fill", HF.portrait ? { scaleY: 0, duration: DRAW, ease: "power2.inOut" } : { scaleX: 0, duration: DRAW, ease: "power2.inOut" }, T_LINE);
+      built.forEach((b) => {
+        // Each point lands when the drawing line reaches it (power2.inOut inverted approximately by its position).
+        const at = T_LINE + DRAW * (b.pos < 0.5 ? Math.sqrt(b.pos / 2) : 1 - Math.sqrt((1 - b.pos) / 2));
+        tl.from(b.pt.querySelector(".dot"), { scale: 0, duration: 0.45, ease: "back.out(1.7)" }, at)
+          .from(b.pt.querySelector(".when"), { opacity: 0, y: HF.portrait ? 0 : 20, x: HF.portrait ? -20 : 0, duration: 0.45, ease: "expo.out" }, at + 0.05)
+          .from(b.pt.querySelector(".what"), { opacity: 0, duration: 0.4, ease: "power2.out" }, at + 0.15);
+        if (b.pt.classList.contains("hot")) {
+          tl.fromTo(b.pt.querySelector(".when"), { scale: 1 }, { scale: 1.2, duration: 0.2, yoyo: true, repeat: 1,
+            ease: "power2.out", immediateRender: false }, at + 0.4);
+        }
+      });
+      tl.to("#scene", { opacity: 0, duration: 0.25, ease: "power2.in" }, dur - 0.25);
+      tl.seek(0);
+    </script>
+  </body>
+</html>

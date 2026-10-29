@@ -1,0 +1,138 @@
+<!doctype html>
+<html lang="en" data-composition-variables='[
+  {"id":"kicker","type":"string","label":"Small label above the title","default":"HIGHEST CHASES"},
+  {"id":"title","type":"string","label":"Title","default":"430 changed the record book"},
+  {"id":"items","type":"string","label":"Bars: JSON [{\"label\":..,\"value\":..}] or Label:Value | Label:Value","default":"[{\"label\":\"Sri Lanka\",\"value\":430},{\"label\":\"South Africa\",\"value\":438},{\"label\":\"India\",\"value\":226}]"},
+  {"id":"highlight","type":"string","label":"Bar to light up (its label)","default":"Sri Lanka"},
+  {"id":"unit","type":"string","label":"Unit after each number","default":"runs"},
+  {"id":"note","type":"string","label":"Source or note line","default":"ODI chases, men"},
+  {"id":"accent","type":"color","label":"Accent","default":"#FFD23F"}
+]'>
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=__W__, height=__H__" />
+    <script src="https://cdn.jsdelivr.net/npm/gsap@3.14.2/dist/gsap.min.js"></script>
+    <link rel="stylesheet" href="assets/base.css" />
+    <style>
+      html, body { width: __W__px; height: __H__px; }
+      #root { background: #060A18; }
+      .sky { position: absolute; inset: 0;
+        background:
+          radial-gradient(70% 45% at 50% 18%, rgba(70,110,255,.30), transparent 70%),
+          radial-gradient(90% 70% at 50% 60%, #0E1C46 0%, #060A18 75%); }
+      .head { position: absolute; }
+      .kicker { font-family: "Inter"; font-weight: 700; letter-spacing: .32em; color: var(--accent); }
+      .title { font-family: "Montserrat"; font-weight: 800; line-height: 1.05; color: #fff; }
+      .title .w { display: inline-block; margin-right: .24em; }
+      .rows { position: absolute; }
+      .row { position: relative; }
+      .label { font-family: "Montserrat"; font-weight: 700; color: rgba(255,255,255,.75); }
+      .track { position: relative; border-radius: 999px; background: rgba(255,255,255,.07); overflow: hidden; }
+      .bar { position: absolute; left: 0; top: 0; bottom: 0; border-radius: 999px; transform-origin: 0 50%;
+        background: linear-gradient(90deg, rgba(255,255,255,.35), rgba(255,255,255,.55)); }
+      .row.hot .bar { background: linear-gradient(90deg, #FF9F1A, var(--accent)); box-shadow: 0 0 40px rgba(255,210,63,.35); }
+      .row.hot .label { color: #fff; }
+      .val { position: absolute; font-family: "Archivo Black"; color: #fff; font-variant-numeric: tabular-nums; white-space: nowrap; }
+      .row.hot .val { color: var(--accent); }
+      .unit { font-family: "Inter"; font-weight: 700; opacity: .7; margin-left: .3em; }
+      .note { position: absolute; font-family: "Inter"; font-weight: 600; color: rgba(255,255,255,.55); letter-spacing: .04em; }
+
+      .portrait .head { left: 80px; right: 80px; top: 230px; }
+      .portrait .kicker { font-size: 30px; }
+      .portrait .title { font-size: 76px; margin-top: 20px; }
+      .portrait .rows { left: 80px; right: 80px; top: 640px; }
+      .portrait .row { margin-bottom: 120px; }
+      .portrait .label { font-size: 48px; margin-bottom: 20px; }
+      .portrait .track { height: 84px; }
+      .portrait .val { font-size: 70px; right: 0; top: -2px; }
+      .portrait .note { left: 80px; bottom: 300px; font-size: 32px; }
+
+      .landscape .head { left: 140px; right: 140px; top: 110px; }
+      .landscape .kicker { font-size: 26px; }
+      .landscape .title { font-size: 72px; margin-top: 14px; }
+      .landscape .rows { left: 140px; right: 140px; top: 400px; }
+      .landscape .row { margin-bottom: 52px; display: grid; grid-template-columns: 330px 1fr 250px; align-items: center; column-gap: 30px; }
+      .landscape .label { font-size: 38px; text-align: right; }
+      .landscape .track { height: 76px; }
+      .landscape .val { position: static; font-size: 56px; }
+      .landscape .note { left: 140px; bottom: 70px; font-size: 26px; }
+    </style>
+  </head>
+  <body>
+    <div id="root" class="__ORIENT__" data-composition-id="main" data-start="0" data-duration="__DUR__"
+         data-width="__W__" data-height="__H__">
+      <div id="scene" class="scene clip" data-start="0" data-duration="__DUR__" data-track-index="0">
+        <div class="sky"></div>
+        <div class="head"><div class="kicker" id="kicker"></div><div class="title" id="title"></div></div>
+        <div class="rows" id="rows"></div>
+        <div class="note" id="note"></div>
+      </div>
+    </div>
+    <script src="assets/base.js"></script>
+    <script>
+      const v = HF.vars;
+      const dur = __DUR__;
+      const tl = gsap.timeline({ paused: true });
+      window.__timelines = window.__timelines || {};
+      window.__timelines["main"] = tl;
+
+      const items = HF.list(v.items).map((it) => {
+        if (typeof it === "object" && it) return { label: String(it.label || ""), value: Number(it.value) || 0 };
+        const [label, value] = String(it).split(":");
+        return { label: (label || "").trim(), value: Number(String(value || "").replace(/[^0-9.\-]/g, "")) || 0 };
+      }).filter((it) => it.label).slice(0, 5);
+      const max = Math.max(1, ...items.map((it) => it.value));
+      const decimals = items.some((it) => !Number.isInteger(it.value)) ? 1 : 0;
+      const hotName = String(v.highlight || "").toLowerCase().trim();
+
+      HF.text("#kicker", String(v.kicker || "").toUpperCase());
+      String(v.title || "").split(/\s+/).filter(Boolean).forEach((w) => {
+        const s = document.createElement("span"); s.className = "w"; s.textContent = w; HF.$("#title").appendChild(s);
+      });
+      HF.text("#note", v.note);
+      const rows = HF.$("#rows");
+      const built = items.map((it) => {
+        const row = document.createElement("div");
+        row.className = "row" + (it.label.toLowerCase() === hotName ? " hot" : "");
+        row.innerHTML = '<div class="label"></div><div class="track"><div class="bar"></div></div>';
+        row.querySelector(".label").textContent = it.label;
+        const val = document.createElement("div");
+        val.className = "val";
+        val.innerHTML = '<span class="num">0</span><span class="unit"></span>';
+        val.querySelector(".unit").textContent = v.unit ? String(v.unit) : "";
+        row.appendChild(val);
+        rows.appendChild(row);
+        return { row, it, bar: row.querySelector(".bar"), num: row.querySelector(".num"), val };
+      });
+      // Value text sits above the bar's right end in portrait, at the track's right in landscape.
+      if (HF.portrait) built.forEach((b) => { b.val.style.top = "-6px"; });
+
+      // Shared with sound cues (hfpipe/cues.py "compare-bars").
+      const T_BARS = 0.7, STEP = 0.18, GROW = 1.3;
+      tl.from("#kicker", { y: -20, opacity: 0, duration: 0.5, ease: "expo.out" }, 0.1)
+        .from("#title .w", { opacity: 0, y: 26, duration: 0.55, ease: "expo.out", stagger: 0.08 }, 0.2);
+      built.forEach((b, i) => {
+        const at = T_BARS + i * STEP;
+        const share = b.it.value / max;
+        b.bar.style.width = (share * 100).toFixed(2) + "%";
+        const count = { n: 0 };
+        tl.from(b.row.querySelector(".label"), { opacity: 0, x: -30, duration: 0.45, ease: "expo.out" }, at)
+          .from(b.bar, { scaleX: 0, duration: GROW, ease: "expo.out" }, at + 0.05)
+          .from(b.val, { opacity: 0, duration: 0.3 }, at + 0.1)
+          .to(count, { n: b.it.value, duration: GROW, ease: "expo.out",
+            onUpdate: () => { b.num.textContent = count.n.toFixed(decimals); } }, at + 0.05);
+        b.num.textContent = "0";
+      });
+      const landed = T_BARS + (built.length - 1) * STEP + GROW * 0.6;
+      const hot = built.find((b) => b.row.classList.contains("hot"));
+      if (hot) {
+        tl.fromTo(hot.val, { scale: 1 }, { scale: 1.18, duration: 0.18, ease: "power2.out", yoyo: true, repeat: 1,
+          transformOrigin: "100% 50%", immediateRender: false }, landed);
+        built.filter((b) => b !== hot).forEach((b) => tl.to(b.row, { opacity: 0.45, duration: 0.4, ease: "power2.inOut" }, landed));
+      }
+      tl.from("#note", { opacity: 0, duration: 0.5 }, landed + 0.2);
+      tl.to("#scene", { opacity: 0, duration: 0.25, ease: "power2.in" }, dur - 0.25);
+      tl.seek(0);
+    </script>
+  </body>
+</html>

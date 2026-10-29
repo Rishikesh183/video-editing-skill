@@ -1,0 +1,91 @@
+<!doctype html>
+<html lang="en" data-composition-variables='[
+  {"id":"team","type":"string","label":"Chasing team","default":"INDIA"},
+  {"id":"target","type":"number","label":"Target","default":226},
+  {"id":"note","type":"string","label":"Note","default":"Quick wickets made it feel like a choke"},
+  {"id":"photo","type":"string","label":"Background photo","default":""},
+  {"id":"accent","type":"color","label":"Accent","default":"#FF7A1A"}
+]'>
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=__W__, height=__H__" />
+    <script src="https://cdn.jsdelivr.net/npm/gsap@3.14.2/dist/gsap.min.js"></script>
+    <link rel="stylesheet" href="assets/base.css" />
+    <style>
+      html, body { width: __W__px; height: __H__px; }
+      .wrap { position: absolute; text-align: center; }
+      .team { white-space: nowrap; letter-spacing: .1em; }
+      .label { letter-spacing: .3em; }
+      .target { color: var(--accent); }
+      .meter { display: flex; justify-content: center; }
+      .seg { background: var(--accent); border-radius: 6px; transform-origin: 50% 100%; }
+      .seg:nth-child(5n) { opacity: .55; }
+      .note { line-height: 1.15; }
+
+      .portrait .wrap { left: 60px; right: 60px; top: 260px; }
+      .portrait .team { font-size: 90px; }
+      .portrait .label { font-size: 46px; margin-top: 40px; }
+      .portrait .target { font-size: 380px; }
+      .portrait .meter { gap: 12px; height: 120px; align-items: flex-end; margin-top: 20px; }
+      .portrait .seg { width: 34px; }
+      .portrait .note { font-size: 56px; margin-top: 60px; }
+
+      .landscape .wrap { left: 200px; right: 200px; top: 110px; }
+      .landscape .team { font-size: 80px; }
+      .landscape .label { font-size: 40px; margin-top: 10px; }
+      .landscape .target { font-size: 320px; }
+      .landscape .meter { gap: 14px; height: 90px; align-items: flex-end; }
+      .landscape .seg { width: 40px; }
+      .landscape .note { font-size: 50px; margin-top: 34px; }
+    </style>
+  </head>
+  <body>
+    <div id="root" class="__ORIENT__" data-composition-id="main" data-start="0" data-duration="__DUR__"
+         data-width="__W__" data-height="__H__">
+      <div id="scene" class="scene clip" data-start="0" data-duration="__DUR__" data-track-index="0">
+        <div class="wrap" id="wrap">
+          <div class="team display shadow" id="team"></div>
+          <div class="label muted">TARGET</div>
+          <div class="target display shadow" id="target">0</div>
+          <div class="meter" id="meter"></div>
+          <div class="note shadow" id="note"></div>
+        </div>
+      </div>
+    </div>
+    <script src="assets/base.js"></script>
+    <script>
+      const v = HF.vars;
+      const dur = __DUR__;
+      const tl = gsap.timeline({ paused: true });
+      window.__timelines = window.__timelines || {};
+      window.__timelines["main"] = tl;
+
+      const fx = HF.backdrop(tl, { photo: v.photo, dur });
+      HF.$("#scene").appendChild(HF.$("#wrap"));
+      HF.text("#team", String(v.team).toUpperCase() + " CHASE");
+      HF.text("#note", v.note);
+      const meter = HF.$("#meter");
+      // 20 bars rising like an over-by-over worm (decorative, not data).
+      for (let i = 0; i < 20; i++) {
+        const seg = document.createElement("div");
+        seg.className = "seg";
+        seg.style.height = Math.round(30 + 70 * Math.abs(Math.sin(i * 1.7 + 0.5))) + "%";
+        meter.appendChild(seg);
+      }
+      HF.afterFonts(() => HF.fit(HF.$("#team")));
+
+      HF.flash(tl, fx, 0);
+      tl.from("#team", { y: -50, opacity: 0, duration: 0.4, ease: "power3.out" }, 0.2)
+        .from(".label", { opacity: 0, duration: 0.3 }, 0.4)
+        .from("#target", { scale: 2, opacity: 0, duration: 0.4, ease: "power4.out" }, 0.5)
+        .to("#target", { innerText: v.target, snap: { innerText: 1 }, duration: 1.1, ease: "power2.out" }, 0.5)
+        .from(".seg", { scaleY: 0, duration: 0.3, stagger: 0.05, ease: "back.out(2)" }, 0.9)
+        .fromTo("#target", { scale: 1 }, { scale: 1.08, duration: 0.2, yoyo: true, repeat: 1 }, 1.65);
+      HF.shake(tl, "#scene", 1.65, 14);
+      tl.from("#note", { y: 40, opacity: 0, duration: 0.5, ease: "power2.out" }, 1.9);
+      HF.sweep(tl, fx, 2.2);
+      tl.to("#scene", { opacity: 0, duration: 0.3 }, dur - 0.3);
+      tl.seek(0);
+    </script>
+  </body>
+</html>

@@ -1,0 +1,168 @@
+{
+  "scenes": [
+    {
+      "id": "s1",
+      "start": 1.27,
+      "end": 5,
+      "mode": "fullframe",
+      "template": "innings-compare",
+      "data": {
+        "player": "Naman Dhir",
+        "tagline": "Perfect finisher at number 7",
+        "left_label": "Last match",
+        "left_runs": 24,
+        "left_balls": 6,
+        "right_label": "This match",
+        "right_runs": 42,
+        "right_balls": 15
+      },
+      "reason": "Direct last vs this match comparison"
+    },
+    {
+      "id": "s2",
+      "start": 12,
+      "end": 16.66,
+      "mode": "fullframe",
+      "template": "player-spotlight",
+      "data": {
+        "player": "Bhuvneshwar Kumar",
+        "headline": "Back after 4 years",
+        "stat_lines": [
+          "49 runs in 4 overs",
+          "2 no-balls"
+        ],
+        "photo": "bhuvneshwar_kumar"
+      },
+      "reason": "Named player with comeback stats"
+    },
+    {
+      "id": "s3",
+      "start": 17.97,
+      "end": 22,
+      "mode": "fullframe",
+      "template": "kinetic-text",
+      "data": {
+        "text": "ALMOST 300 OVERS. NEVER A NO-BALL.",
+        "style": "slam"
+      },
+      "reason": "Punchline on big number"
+    },
+    {
+      "id": "s4",
+      "start": 25,
+      "end": 30.24,
+      "mode": "fullframe",
+      "template": "team-total",
+      "data": {
+        "team": "New Zealand",
+        "runs": 225,
+        "top_scorers": [
+          {
+            "player": "Glenn Phillips",
+            "runs": 82,
+            "not_out": true
+          },
+          {
+            "player": "Finn Allen",
+            "runs": 45
+          }
+        ]
+      },
+      "reason": "NZ total with top scorers"
+    },
+    {
+      "id": "s5",
+      "start": 30.24,
+      "end": 35.56,
+      "mode": "fullframe",
+      "template": "chase-meter",
+      "data": {
+        "team": "India",
+        "target": 226,
+        "note": "Quick wickets made it feel like a choke"
+      },
+      "reason": "India's chase target"
+    },
+    {
+      "id": "s6",
+      "start": 37.94,
+      "end": 43.48,
+      "mode": "fullframe",
+      "template": "player-spotlight",
+      "data": {
+        "player": "Shreyas Iyer",
+        "headline": "Kept the run rate up",
+        "stat_lines": [
+          "Played a good knock",
+          "India momentum held"
+        ],
+        "photo": "shreyas_iyer"
+      },
+      "reason": "Named player, supporting claim"
+    },
+    {
+      "id": "s7",
+      "start": 44.89,
+      "end": 50.32,
+      "mode": "fullframe",
+      "template": "player-spotlight",
+      "data": {
+        "player": "Naman Dhir",
+        "headline": "Finished without any mistake",
+        "stat_lines": [
+          "Finished the match",
+          "Impact with bat and ball"
+        ],
+        "photo": "naman_dhir"
+      },
+      "reason": "Naman finishing the match"
+    },
+    {
+      "id": "s8",
+      "start": 50.32,
+      "end": 54.56,
+      "mode": "overlay",
+      "template": "photo-overlay",
+      "data": {
+        "photo": "naman_dhir",
+        "caption": "Naman Dhir: impact with bat and ball"
+      },
+      "reason": "Overlay keeps creator visible"
+    },
+    {
+      "id": "s9",
+      "start": 58.64,
+      "end": 65,
+      "mode": "fullframe",
+      "template": "player-spotlight",
+      "data": {
+        "player": "Sanju Samson",
+        "headline": "Playing very well recently",
+        "stat_lines": [
+          "Under constant pressure",
+          "Scoring runs consistently"
+        ],
+        "photo": "sanju_samson"
+      },
+      "reason": "Named player, closing praise"
+    }
+  ],
+  "assets_needed": [
+    {
+      "slot": "naman_dhir",
+      "description": "Photo of Naman Dhir batting"
+    },
+    {
+      "slot": "bhuvneshwar_kumar",
+      "description": "Photo of Bhuvneshwar Kumar bowling"
+    },
+    {
+      "slot": "shreyas_iyer",
+      "description": "Photo of Shreyas Iyer batting"
+    },
+    {
+      "slot": "sanju_samson",
+      "description": "Photo of Sanju Samson"
+    }
+  ]
+}

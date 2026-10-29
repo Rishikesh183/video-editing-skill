@@ -1,0 +1,114 @@
+<!doctype html>
+<html lang="en" data-composition-variables='[
+  {"id":"player","type":"string","label":"Bowler","default":"BHUVNESHWAR KUMAR"},
+  {"id":"overs","type":"string","label":"Overs (e.g. 4 or 3.4)","default":"4"},
+  {"id":"runs","type":"number","label":"Runs conceded","default":49},
+  {"id":"wickets","type":"string","label":"Wickets (blank if not said)","default":""},
+  {"id":"extras_note","type":"string","label":"Note","default":"2 NO-BALLS"},
+  {"id":"photo","type":"string","label":"Photo path","default":""},
+  {"id":"cutout","type":"string","label":"Cut-out path","default":""},
+  {"id":"accent","type":"color","label":"Accent","default":"#FF7A1A"}
+]'>
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=__W__, height=__H__" />
+    <script src="https://cdn.jsdelivr.net/npm/gsap@3.14.2/dist/gsap.min.js"></script>
+    <link rel="stylesheet" href="assets/base.css" />
+    <style>
+      html, body { width: __W__px; height: __H__px; }
+      .photo-frame { position: absolute; border-radius: 50%; }
+      .block { position: absolute; text-align: center; }
+      .player { white-space: nowrap; }
+      .label { letter-spacing: .16em; }
+      .figure { display: flex; align-items: baseline; justify-content: center; }
+      .chips { display: flex; justify-content: center; }
+      .chip { text-align: center; }
+      .chip .k { letter-spacing: .14em; }
+      .note { display: inline-block; background: var(--accent); color: var(--ground); border-radius: 14px; letter-spacing: .08em; }
+
+      .portrait .photo-frame { left: 340px; top: 150px; width: 400px; height: 400px; }
+      .portrait .block { left: 60px; right: 60px; top: 640px; }
+      .portrait .player { font-size: 110px; }
+      .portrait .label { font-size: 38px; margin-top: 18px; }
+      .portrait .figure { font-size: 250px; gap: 10px; }
+      .portrait .chips { gap: 30px; margin-top: 6px; }
+      .portrait .chip { width: 300px; padding: 18px 0; }
+      .portrait .chip .k { font-size: 30px; }
+      .portrait .chip .v { font-size: 76px; }
+      .portrait .note { font-size: 44px; padding: 10px 30px; margin-top: 26px; }
+
+      .landscape .photo-frame { left: 170px; top: 230px; width: 460px; height: 460px; }
+      .landscape .block { left: 760px; right: 80px; top: 90px; }
+      .landscape .player { font-size: 100px; }
+      .landscape .label { font-size: 32px; margin-top: 12px; }
+      .landscape .figure { font-size: 230px; gap: 10px; }
+      .landscape .chips { gap: 30px; }
+      .landscape .chip { width: 300px; padding: 14px 0; }
+      .landscape .chip .k { font-size: 28px; }
+      .landscape .chip .v { font-size: 66px; }
+      .landscape .note { font-size: 38px; padding: 10px 28px; margin-top: 22px; }
+    </style>
+  </head>
+  <body>
+    <div id="root" class="__ORIENT__" data-composition-id="main" data-start="0" data-duration="__DUR__"
+         data-width="__W__" data-height="__H__">
+      <div id="scene" class="scene clip" data-start="0" data-duration="__DUR__" data-track-index="0">
+        <div class="photo-frame" id="photo"></div>
+        <div class="block" id="block">
+          <div class="player display shadow" id="player"></div>
+          <div class="label muted">BOWLING FIGURES</div>
+          <div class="figure display shadow">
+            <span id="wkts" class="accent"></span><span id="sep" class="muted">-</span><span id="runs">0</span>
+          </div>
+          <div class="chips">
+            <div class="chip panel"><div class="k muted">OVERS</div><div class="v display" id="overs"></div></div>
+            <div class="chip panel"><div class="k muted">ECONOMY</div><div class="v display" id="econ"></div></div>
+          </div>
+          <div class="note display" id="note"></div>
+        </div>
+      </div>
+    </div>
+    <script src="assets/base.js"></script>
+    <script>
+      const v = HF.vars;
+      const dur = __DUR__;
+      const tl = gsap.timeline({ paused: true });
+      window.__timelines = window.__timelines || {};
+      window.__timelines["main"] = tl;
+
+      const fx = HF.backdrop(tl, { photo: v.photo, dur, kenBurns: "out" });
+      // Cricket overs: "3.4" means 3 overs and 4 balls.
+      const [whole, part] = String(v.overs || "0").split(".");
+      const balls = Number(whole || 0) * 6 + Number(part || 0);
+      HF.text("#player", v.player);
+      HF.text("#overs", v.overs);
+      HF.text("#econ", balls ? ((v.runs * 6) / balls).toFixed(2) : "-");
+      const hasW = String(v.wickets).trim() !== "";
+      HF.text("#wkts", hasW ? v.wickets : "");
+      if (!hasW) { HF.$("#sep").style.display = "none"; HF.$("#wkts").style.display = "none"; }
+      HF.text("#note", v.extras_note);
+      if (!v.extras_note) HF.$("#note").style.display = "none";
+      const hero = HF.cutout(v.cutout, HF.portrait
+        ? { left: "10%", width: "80%", top: "60px", height: "560px" }
+        : { left: "1%", width: "40%", top: "60px", bottom: "0" });
+      if (hero) HF.$("#photo").style.display = "none"; else HF.photo("#photo", v.photo, v.player);
+      HF.$("#scene").appendChild(HF.$("#block"));
+      HF.afterFonts(() => HF.fit(HF.$("#player")));
+
+      const heroEl = hero || HF.$("#photo");
+      HF.flash(tl, fx, 0);
+      tl.from(heroEl, { x: HF.portrait ? 0 : -200, y: HF.portrait ? 160 : 0, opacity: 0, duration: 0.55, ease: "power3.out" }, 0.05)
+        .to(heroEl, { scale: 1.05, duration: dur - 0.7, ease: "none" }, 0.6)
+        .from("#player", { y: 60, opacity: 0, duration: 0.4, ease: "power3.out" }, 0.3)
+        .from(".label", { opacity: 0, duration: 0.35 }, 0.5)
+        .from(".figure", { scale: 1.6, opacity: 0, duration: 0.4, ease: "power4.out" }, 0.7)
+        .to("#runs", { innerText: v.runs, snap: { innerText: 1 }, duration: 1.0, ease: "power1.out" }, 0.75)
+        .from(".chip", { y: 50, opacity: 0, duration: 0.35, stagger: 0.15, ease: "power3.out" }, 1.3);
+      HF.shake(tl, "#scene", 1.75, 12);
+      tl.from("#note", { scale: 0, rotation: -6, duration: 0.35, ease: "back.out(2)" }, 1.9);
+      HF.sweep(tl, fx, 2.3);
+      tl.to("#scene", { opacity: 0, duration: 0.3 }, dur - 0.3);
+      tl.seek(0);
+    </script>
+  </body>
+</html>

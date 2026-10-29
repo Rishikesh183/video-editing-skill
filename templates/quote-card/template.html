@@ -1,0 +1,74 @@
+<!doctype html>
+<html lang="en" data-composition-variables='[
+  {"id":"text","type":"string","label":"Quote","default":"Class is class. Surely he will make a comeback."},
+  {"id":"attribution","type":"string","label":"Attribution","default":""},
+  {"id":"photo","type":"string","label":"Background photo","default":""},
+  {"id":"accent","type":"color","label":"Accent","default":"#FF7A1A"}
+]'>
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=__W__, height=__H__" />
+    <script src="https://cdn.jsdelivr.net/npm/gsap@3.14.2/dist/gsap.min.js"></script>
+    <link rel="stylesheet" href="assets/base.css" />
+    <style>
+      html, body { width: __W__px; height: __H__px; }
+      .safe { display: flex; flex-direction: column; justify-content: center; }
+      .mark { color: var(--accent); line-height: .8; }
+      .quote { line-height: 1.12; }
+      .quote .w { display: inline-block; margin-right: .22em; }
+      .rule { height: 10px; background: var(--accent); transform-origin: 0 50%; }
+      .attr { letter-spacing: .14em; }
+      .portrait .mark { font-size: 320px; }
+      .portrait .rule { width: 240px; margin-top: 50px; }
+      .portrait .attr { font-size: 48px; margin-top: 26px; }
+      .landscape .mark { font-size: 260px; }
+      .landscape .rule { width: 220px; margin-top: 40px; }
+      .landscape .attr { font-size: 42px; margin-top: 20px; }
+    </style>
+  </head>
+  <body>
+    <div id="root" class="__ORIENT__" data-composition-id="main" data-start="0" data-duration="__DUR__"
+         data-width="__W__" data-height="__H__">
+      <div id="scene" class="scene clip" data-start="0" data-duration="__DUR__" data-track-index="0">
+        <div class="safe" id="safe">
+          <div class="mark display">&ldquo;</div>
+          <div class="quote display shadow" id="quote"></div>
+          <div class="rule" id="rule"></div>
+          <div class="attr muted" id="attr"></div>
+        </div>
+      </div>
+    </div>
+    <script src="assets/base.js"></script>
+    <script>
+      const v = HF.vars;
+      const dur = __DUR__;
+      const tl = gsap.timeline({ paused: true });
+      window.__timelines = window.__timelines || {};
+      window.__timelines["main"] = tl;
+
+      const fx = HF.backdrop(tl, { photo: v.photo, dur, kenBurns: "out" });
+      HF.$("#scene").appendChild(HF.$("#safe"));
+      const quote = HF.$("#quote");
+      String(v.text).toUpperCase().split(/\s+/).filter(Boolean).forEach((word) => {
+        const span = document.createElement("span");
+        span.className = "w";
+        span.textContent = word;
+        quote.appendChild(span);
+        quote.append(" ");
+      });
+      HF.text("#attr", v.attribution ? "— " + String(v.attribution).toUpperCase() : "");
+      quote.style.fontSize = HF.blockSize(v.text, HF.portrait ? 960 : 1720, HF.portrait ? 800 : 480, HF.portrait ? 130 : 110) + "px";
+
+      // Shared with sound cues: word i lands at 0.3 + i * step.
+      const words = quote.querySelectorAll(".w");
+      const step = Math.min(0.12, (dur - 2) / Math.max(1, words.length));
+      tl.from(".mark", { scale: 0, rotation: -30, duration: 0.5, ease: "back.out(2)" }, 0)
+        .from(words, { y: 50, opacity: 0, duration: 0.3, stagger: step, ease: "power3.out" }, 0.3)
+        .from("#rule", { scaleX: 0, duration: 0.5, ease: "power3.out" }, 0.4 + words.length * step)
+        .from("#attr", { opacity: 0, x: -30, duration: 0.4 }, 0.6 + words.length * step);
+      HF.sweep(tl, fx, 0.6 + words.length * step);
+      tl.to("#scene", { opacity: 0, duration: 0.3 }, dur - 0.3);
+      tl.seek(0);
+    </script>
+  </body>
+</html>

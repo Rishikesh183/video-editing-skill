@@ -1,0 +1,82 @@
+{
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "story",
+    "scenes",
+    "assets_needed"
+  ],
+  "properties": {
+    "story": {
+      "type": "string",
+      "description": "Editor's notes written BEFORE choosing scenes: the video's hook, beats and payoff, and for each beat the cricket picture a top editor would show (not the literal words)."
+    },
+    "scenes": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "start",
+          "end",
+          "mode",
+          "template",
+          "data",
+          "reason"
+        ],
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "start": {
+            "type": "number"
+          },
+          "end": {
+            "type": "number"
+          },
+          "mode": {
+            "enum": [
+              "fullframe",
+              "overlay"
+            ]
+          },
+          "template": {
+            "type": "string"
+          },
+          "data": {
+            "type": "object"
+          },
+          "needs_input": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "reason": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "assets_needed": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "slot",
+          "description"
+        ],
+        "properties": {
+          "slot": {
+            "type": "string"
+          },
+          "description": {
+            "type": "string"
+          }
+        }
+      }
+    }
+  }
+}

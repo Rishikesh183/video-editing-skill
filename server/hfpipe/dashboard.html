@@ -1,0 +1,185 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Edit Usage</title>
+<style>
+  :root {
+    --bg: #F6F7FB; --card: #FFFFFF; --ink: #121522; --muted: #667085; --line: #E4E7EF;
+    --claude: #D97757; --codex: #2F6FEB; --good: #12B76A; --warn: #F79009; --bad: #F04438;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg: #0D0F17; --card: #161A25; --ink: #EEF0F6; --muted: #98A2B3; --line: #262B3A; }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--ink); font: 15px/1.45 system-ui, -apple-system, Segoe UI, Roboto, sans-serif; }
+  main { max-width: 1100px; margin: 0 auto; padding: 20px 16px 60px; }
+  h1 { font-size: 22px; margin: 0 0 4px; }
+  .sub { color: var(--muted); margin: 0 0 18px; font-size: 13px; }
+  .grid { display: grid; gap: 12px; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); }
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 16px; }
+  .card h2 { font-size: 12px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); margin: 0 0 10px; }
+  .big { font-size: 28px; font-weight: 700; font-variant-numeric: tabular-nums; }
+  .row { display: flex; justify-content: space-between; gap: 10px; font-size: 13px; color: var(--muted); margin-top: 4px; }
+  .row b { color: var(--ink); font-weight: 600; font-variant-numeric: tabular-nums; }
+  .dot { display: inline-block; width: 9px; height: 9px; border-radius: 50%; margin-right: 6px; vertical-align: 1px; }
+  .bar { height: 8px; border-radius: 99px; background: var(--line); overflow: hidden; margin-top: 10px; }
+  .bar i { display: block; height: 100%; border-radius: 99px; }
+  section { margin-top: 22px; }
+  section > h2 { font-size: 15px; margin: 0 0 10px; }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  th, td { text-align: left; padding: 8px 6px; border-bottom: 1px solid var(--line); white-space: nowrap; }
+  th { color: var(--muted); font-weight: 600; font-size: 12px; }
+  td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
+  .scroll { overflow-x: auto; }
+  .chart { display: flex; align-items: flex-end; gap: 4px; height: 140px; padding-top: 8px; }
+  .chart .col { flex: 1; display: flex; flex-direction: column-reverse; min-width: 6px; }
+  .chart .seg { border-radius: 3px 3px 0 0; }
+  .axis { display: flex; justify-content: space-between; color: var(--muted); font-size: 11px; margin-top: 6px; }
+  input { font: inherit; padding: 8px 10px; border-radius: 9px; border: 1px solid var(--line); background: var(--bg); color: var(--ink); width: 100%; }
+  button { font: inherit; padding: 8px 14px; border-radius: 9px; border: 0; background: var(--ink); color: var(--bg); cursor: pointer; }
+  .calib { display: grid; grid-template-columns: 1fr 1fr auto; gap: 8px; align-items: end; }
+  .calib label { font-size: 12px; color: var(--muted); }
+  .note { font-size: 12px; color: var(--muted); margin-top: 8px; }
+  .err { color: var(--bad); }
+  #login { max-width: 420px; }
+</style>
+</head>
+<body>
+<main>
+  <h1>Edit usage</h1>
+  <p class="sub" id="sub">Planner calls from this PC: tokens, cost and how much of your plan they use.</p>
+
+  <div class="card" id="login" hidden>
+    <h2>Connect</h2>
+    <p class="note">Paste the API token from <code>data\api-token.txt</code>. It is kept in this browser only.</p>
+    <input id="token" type="password" placeholder="API token" />
+    <p><button id="save">Open dashboard</button> <span id="loginErr" class="err"></span></p>
+  </div>
+
+  <div id="app" hidden>
+    <div class="grid" id="tiles"></div>
+
+    <section class="card">
+      <h2>Plan limits</h2>
+      <p class="note" id="limitNote"></p>
+      <div class="grid" id="limits" style="margin-top:10px"></div>
+      <div class="calib" style="margin-top:14px">
+        <div><label>Claude 5-hour session % used now</label><input id="cSession" inputmode="decimal" placeholder="e.g. 12" /></div>
+        <div><label>Claude weekly % used now</label><input id="cWeek" inputmode="decimal" placeholder="e.g. 4" /></div>
+        <button id="calib">Save reading</button>
+      </div>
+      <p class="note">Read these from Claude's usage screen (claude.ai › Settings › Usage, or <code>/usage</code> in Claude Code) right after an edit. Other Claude use (chat, coding) also counts toward the same limits, so readings taken right after a plan are the most accurate.</p>
+    </section>
+
+    <section class="card">
+      <h2>Last 30 days</h2>
+      <div class="chart" id="chart"></div>
+      <div class="axis"><span id="axisFrom"></span><span><span class="dot" style="background:var(--claude)"></span>Claude <span class="dot" style="background:var(--codex);margin-left:10px"></span>ChatGPT</span><span id="axisTo"></span></div>
+    </section>
+
+    <section class="card">
+      <h2>Edits</h2>
+      <div class="scroll"><table id="jobs"></table></div>
+    </section>
+  </div>
+</main>
+<script>
+(() => {
+  const $ = (id) => document.getElementById(id);
+  const store = {
+    get(k, d) { try { const v = localStorage.getItem(k); return v == null ? d : JSON.parse(v); } catch { return d; } },
+    set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch {} },
+  };
+  const fmt = (n) => (n || 0).toLocaleString();
+  const usd = (n) => "$" + (n || 0).toFixed(n >= 1 ? 2 : 3);
+  const tok = (r) => (r ? (r.input_tokens || 0) + (r.cache_creation_tokens || 0) + (r.output_tokens || 0) : 0);
+  const NAMES = { claude: "Claude", codex: "ChatGPT" };
+
+  async function load() {
+    const token = store.get("hf-token", "");
+    if (!token) { $("login").hidden = false; return; }
+    const res = await fetch("/usage/dashboard", { headers: { Authorization: "Bearer " + token } });
+    if (res.status === 401) { store.set("hf-token", ""); $("login").hidden = false; $("loginErr").textContent = "That token was rejected."; return; }
+    const data = await res.json();
+    $("login").hidden = true; $("app").hidden = false;
+    store.set("hf-last", data);  // last snapshot, also handy offline
+    render(data);
+  }
+
+  function render(d) {
+    const plans = (w) => Object.values(w || {}).reduce((a, r) => a + r.calls, 0);
+    const jobsWithPlans = d.jobs.filter((j) => j.plans > 0);
+    const perEdit = jobsWithPlans.length ? jobsWithPlans.reduce((a, j) => a + tok(j), 0) / jobsWithPlans.length : 0;
+    const tiles = [
+      ["Edits", fmt(d.edits.jobs), [["Exported", fmt(d.edits.exported)], ["Plans run", fmt(plans(d.all_time))]]],
+      ["This week", fmt(Object.values(d.week).reduce((a, r) => a + tok(r), 0)) + " tok",
+        Object.entries(d.week).map(([p, r]) => [NAMES[p] || p, `${r.calls} plans · ${usd(r.cost_usd)}`])],
+      ["Last 5 hours", fmt(Object.values(d.session_5h).reduce((a, r) => a + tok(r), 0)) + " tok",
+        Object.entries(d.session_5h).map(([p, r]) => [NAMES[p] || p, `${r.calls} plans`])],
+      ["Per edit (avg)", fmt(Math.round(perEdit)) + " tok", [["Claude model", d.providers.claude], ["ChatGPT model", d.providers.codex]]],
+    ];
+    $("tiles").innerHTML = tiles.map(([h, big, rows]) => `<div class="card"><h2>${h}</h2><div class="big">${big}</div>${
+      rows.map(([k, v]) => `<div class="row"><span>${k}</span><b>${v}</b></div>`).join("")}</div>`).join("");
+
+    // Limits: % per dollar of API-equivalent cost, learned from the creator's own readings.
+    const cal = store.get("hf-calib", null);
+    const claudeWeek = (d.week.claude || {}).cost_usd || 0, claudeSession = (d.session_5h.claude || {}).cost_usd || 0;
+    const claudeEdit = jobsWithPlans.length ? jobsWithPlans.reduce((a, j) => a + (j.cost_usd || 0), 0) / jobsWithPlans.length : 0;
+    let cards = [];
+    if (cal && cal.weekCost > 0 && cal.sessionCost > 0) {
+      const wRate = cal.week / cal.weekCost, sRate = cal.session / cal.sessionCost;  // % per $
+      const wNow = Math.min(100, claudeWeek * wRate), sNow = Math.min(100, claudeSession * sRate);
+      const perW = claudeEdit * wRate, perS = claudeEdit * sRate;
+      cards = [
+        ["Claude weekly (from this PC)", wNow, `${perW.toFixed(1)}% per edit · about ${perW > 0 ? Math.floor((100 - cal.week) / perW) : "∞"} more edits this week`],
+        ["Claude 5-hour session", sNow, `${perS.toFixed(1)}% per edit · about ${perS > 0 ? Math.floor((100 - cal.session) / perS) : "∞"} more edits now`],
+      ];
+      $("limitNote").textContent = `Calibrated from your reading on ${new Date(cal.at).toLocaleString()}. Estimates scale your reading by this PC's planner cost.`;
+    } else {
+      $("limitNote").textContent = "Anthropic does not publish Pro limits in tokens. Enter one reading below and the dashboard estimates % per edit from then on. Until then it shows API-equivalent cost: " +
+        `${usd(claudeEdit)} per Claude edit, ${usd(claudeWeek)} this week.`;
+    }
+    const codexWeek = d.week.codex;
+    if (codexWeek) cards.push(["ChatGPT (Codex) this week", null, `${codexWeek.calls} plans · ${fmt(tok(codexWeek))} tokens · check limits in the ChatGPT app`]);
+    $("limits").innerHTML = cards.map(([h, pct, note]) => {
+      const color = pct == null ? "var(--codex)" : pct > 80 ? "var(--bad)" : pct > 50 ? "var(--warn)" : "var(--good)";
+      return `<div><div class="row"><span>${h}</span><b>${pct == null ? "" : pct.toFixed(1) + "%"}</b></div>` +
+        (pct == null ? "" : `<div class="bar"><i style="width:${pct}%;background:${color}"></i></div>`) +
+        `<p class="note">${note}</p></div>`;
+    }).join("");
+
+    // Daily stacked bars (tokens) for 30 days.
+    const days = [];
+    for (let i = 29; i >= 0; i--) { const t = new Date(Date.now() - i * 864e5); days.push(t.toISOString().slice(0, 10)); }
+    const by = {};
+    d.daily.forEach((r) => { (by[r.day] = by[r.day] || {})[r.provider] = r.input_tokens + r.output_tokens; });
+    const max = Math.max(1, ...days.map((day) => Object.values(by[day] || {}).reduce((a, b) => a + b, 0)));
+    $("chart").innerHTML = days.map((day) => {
+      const v = by[day] || {};
+      const seg = (p, c) => v[p] ? `<div class="seg" title="${day} ${NAMES[p]}: ${fmt(v[p])} tokens" style="height:${(v[p] / max) * 130}px;background:${c}"></div>` : "";
+      return `<div class="col">${seg("claude", "var(--claude)")}${seg("codex", "var(--codex)")}</div>`;
+    }).join("");
+    $("axisFrom").textContent = days[0].slice(5); $("axisTo").textContent = "today";
+
+    const head = `<tr><th>When</th><th>Video</th><th>Planner</th><th class="num">Plans</th><th class="num">Cached</th><th class="num">Tokens</th><th class="num">Cost</th><th>Status</th></tr>`;
+    $("jobs").innerHTML = head + d.jobs.map((j) => `<tr><td>${(j.last_ts || "").slice(0, 16)}</td><td>${j.video || j.job_id}${j.duration_s ? ` · ${j.duration_s}s` : ""}</td>` +
+      `<td>${(j.providers || "").split(",").map((p) => `<span class="dot" style="background:var(--${p})"></span>${NAMES[p] || p}`).join(" ")}</td>` +
+      `<td class="num">${j.plans}</td><td class="num">${j.cached}</td><td class="num">${fmt(tok(j))}</td><td class="num">${usd(j.cost_usd)}</td><td>${j.status || ""}${j.exports ? " · exported" : ""}</td></tr>`).join("");
+    $("sub").textContent = `${d.edits.jobs} edits · updated ${new Date().toLocaleTimeString()}`;
+  }
+
+  $("save").onclick = () => { store.set("hf-token", $("token").value.trim()); $("loginErr").textContent = ""; load(); };
+  $("calib").onclick = () => {
+    const d = store.get("hf-last", null), session = parseFloat($("cSession").value), week = parseFloat($("cWeek").value);
+    if (!d || !(session >= 0) || !(week >= 0)) return;
+    store.set("hf-calib", { at: Date.now(), session, week, sessionCost: (d.session_5h.claude || {}).cost_usd || 0, weekCost: (d.week.claude || {}).cost_usd || 0 });
+    render(d);
+  };
+  load().catch((e) => { $("sub").textContent = "Could not load: " + e.message; });
+  setInterval(() => load().catch(() => {}), 30000);
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,78 @@
+<!doctype html>
+<html lang="en" data-composition-variables='[
+  {"id":"title","type":"string","label":"Title","default":"INDIA BATTING DEPTH"},
+  {"id":"labels","type":"string","label":"Labels JSON array (one per photo)","default":"[\"Hardik\",\"Axar\",\"Nithish\"]"},
+  {"id":"photos","type":"string","label":"Photo paths JSON array (up to 3)","default":"[]"},
+  {"id":"accent","type":"color","label":"Accent","default":"#FF7A1A"}
+]'>
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=__W__, height=__H__" />
+    <script src="https://cdn.jsdelivr.net/npm/gsap@3.14.2/dist/gsap.min.js"></script>
+    <link rel="stylesheet" href="assets/base.css" />
+    <style>
+      html, body { width: __W__px; height: __H__px; }
+      .title { position: absolute; text-align: center; white-space: nowrap; }
+      .card { position: absolute; background: #fff; padding: 18px 18px 70px; box-shadow: 0 30px 60px rgba(0,0,0,.55); }
+      .card .pic { width: 100%; height: 100%; overflow: hidden; background: var(--panel); }
+      .card .pic img { width: 100%; height: 100%; object-fit: cover; object-position: 50% 20%; display: block; }
+      .card .cap { position: absolute; left: 0; right: 0; bottom: 14px; text-align: center; color: #111; font-size: 40px; }
+      .portrait .title { left: 60px; right: 60px; top: 130px; font-size: 96px; }
+      .portrait .card { width: 420px; height: 520px; }
+      .landscape .title { left: 100px; right: 100px; top: 60px; font-size: 90px; }
+      .landscape .card { width: 460px; height: 560px; }
+    </style>
+  </head>
+  <body>
+    <div id="root" class="__ORIENT__" data-composition-id="main" data-start="0" data-duration="__DUR__"
+         data-width="__W__" data-height="__H__">
+      <div id="scene" class="scene clip" data-start="0" data-duration="__DUR__" data-track-index="0">
+        <div class="title display shadow" id="title"></div>
+      </div>
+    </div>
+    <script src="assets/base.js"></script>
+    <script>
+      const v = HF.vars;
+      const dur = __DUR__;
+      const tl = gsap.timeline({ paused: true });
+      window.__timelines = window.__timelines || {};
+      window.__timelines["main"] = tl;
+
+      const photos = HF.list(v.photos).slice(0, 3);
+      const labels = HF.list(v.labels);
+      const fx = HF.backdrop(tl, { photo: photos[0] || "", dur });
+      HF.$("#scene").appendChild(HF.$("#title"));
+      HF.text("#title", v.title);
+      HF.afterFonts(() => HF.fit(HF.$("#title")));
+      // Polaroid positions: fanned pile in portrait, a row in landscape.
+      const spots = HF.portrait
+        ? [{ left: 70, top: 360, rot: -8 }, { left: 590, top: 430, rot: 7 }, { left: 330, top: 900, rot: -3 }]
+        : [{ left: 170, top: 300, rot: -8 }, { left: 730, top: 270, rot: 5 }, { left: 1290, top: 310, rot: -4 }];
+      const n = Math.max(1, photos.length || labels.length);
+      // Shared with sound cues: card i drops at 0.35 + i * 0.45.
+      for (let i = 0; i < Math.min(3, n); i++) {
+        const card = HF.el("div", "card");
+        card.style.left = spots[i].left + "px";
+        card.style.top = spots[i].top + "px";
+        const pic = document.createElement("div");
+        pic.className = "pic";
+        card.appendChild(pic);
+        if (photos[i]) { const img = document.createElement("img"); img.src = photos[i]; pic.appendChild(img); }
+        const cap = document.createElement("div");
+        cap.className = "cap display";
+        cap.textContent = labels[i] || "";
+        card.appendChild(cap);
+        gsap.set(card, { rotation: spots[i].rot });
+        const at = 0.35 + i * 0.45;
+        tl.from(card, { y: -900, rotation: spots[i].rot * 4, duration: 0.42, ease: "power3.in" }, at);
+        HF.shake(tl, "#scene", at + 0.42, 8, 4);
+        tl.to(card, { scale: 1.04, duration: dur - at - 0.4, ease: "none" }, at + 0.42);
+      }
+      HF.flash(tl, fx, 0, 0.6);
+      tl.from("#title", { y: -60, opacity: 0, duration: 0.4, ease: "back.out(1.6)" }, 0.1);
+      HF.sweep(tl, fx, 0.35 + Math.min(3, n) * 0.45 + 0.2);
+      tl.to("#scene", { opacity: 0, duration: 0.3 }, dur - 0.3);
+      tl.seek(0);
+    </script>
+  </body>
+</html>

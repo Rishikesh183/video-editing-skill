@@ -1,0 +1,133 @@
+<!doctype html>
+<html lang="en" data-composition-variables='[
+  {"id":"player","type":"string","label":"Player name","default":"NAMAN DHIR"},
+  {"id":"tagline","type":"string","label":"Tagline","default":"PERFECT FINISHER AT No.7"},
+  {"id":"tagline_te","type":"string","label":"Telugu tagline","default":""},
+  {"id":"left_label","type":"string","label":"Left label","default":"LAST MATCH"},
+  {"id":"left_runs","type":"number","label":"Left runs","default":24},
+  {"id":"left_balls","type":"number","label":"Left balls","default":6},
+  {"id":"right_label","type":"string","label":"Right label","default":"THIS MATCH"},
+  {"id":"right_runs","type":"number","label":"Right runs","default":42},
+  {"id":"right_balls","type":"number","label":"Right balls","default":15},
+  {"id":"photo","type":"string","label":"Photo path","default":""},
+  {"id":"cutout","type":"string","label":"Cut-out path","default":""},
+  {"id":"accent","type":"color","label":"Accent","default":"#FF7A1A"}
+]'>
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=__W__, height=__H__" />
+    <script src="https://cdn.jsdelivr.net/npm/gsap@3.14.2/dist/gsap.min.js"></script>
+    <link rel="stylesheet" href="assets/base.css" />
+    <style>
+      html, body { width: __W__px; height: __H__px; }
+      .head { position: absolute; left: 0; right: 0; text-align: center; }
+      .tagline { letter-spacing: .12em; margin-top: 14px; }
+      .tagline-te { margin-top: 8px; }
+      .cols { position: absolute; display: flex; justify-content: center; }
+      .col { text-align: center; position: relative; overflow: hidden; }
+      .col.hot { border-color: var(--accent); box-shadow: 0 0 60px rgba(255,122,26,.35); }
+      .col .label { letter-spacing: .14em; }
+      .col.hot .label { color: var(--accent); }
+      .balls, .sr { letter-spacing: .06em; }
+      .col.hot .sr { color: var(--ink); }
+      .vs { color: var(--accent); align-self: center; }
+
+      .portrait .head { top: 130px; padding: 0 60px; }
+      .portrait .player { font-size: 140px; white-space: nowrap; }
+      .portrait .tagline { font-size: 48px; }
+      .portrait .tagline-te { font-size: 40px; }
+      .portrait .cols { top: 820px; left: 60px; right: 60px; gap: 40px; }
+      .portrait .col { width: 440px; padding: 36px 20px; }
+      .portrait .col .label { font-size: 38px; }
+      .portrait .runs { font-size: 200px; margin-top: 12px; }
+      .portrait .balls { font-size: 48px; margin-top: 10px; }
+      .portrait .sr { font-size: 36px; margin-top: 12px; }
+      .portrait .vs { display: none; }
+
+      .landscape .head { top: 90px; left: 560px; right: 80px; }
+      .landscape .player { font-size: 120px; white-space: nowrap; }
+      .landscape .tagline { font-size: 42px; }
+      .landscape .tagline-te { font-size: 34px; }
+      .landscape .cols { top: 380px; left: 560px; right: 80px; gap: 40px; }
+      .landscape .col { width: 500px; padding: 28px 20px; }
+      .landscape .col .label { font-size: 32px; }
+      .landscape .runs { font-size: 170px; margin-top: 8px; }
+      .landscape .balls { font-size: 42px; margin-top: 6px; }
+      .landscape .sr { font-size: 30px; margin-top: 8px; }
+      .landscape .vs { font-size: 80px; }
+    </style>
+  </head>
+  <body>
+    <div id="root" class="__ORIENT__" data-composition-id="main" data-start="0" data-duration="__DUR__"
+         data-width="__W__" data-height="__H__">
+      <div id="scene" class="scene clip" data-start="0" data-duration="__DUR__" data-track-index="0">
+        <div class="head" id="head">
+          <div class="player display shadow" id="player"></div>
+          <div class="tagline accent shadow" id="tagline"></div>
+          <div class="tagline-te te muted" id="tagline-te"></div>
+        </div>
+        <div class="cols" id="cols">
+          <div class="col panel" id="left">
+            <div class="label muted" id="left-label"></div>
+            <div class="runs display" id="left-runs">0</div>
+            <div class="balls" id="left-balls"></div>
+            <div class="sr muted" id="left-sr"></div>
+          </div>
+          <div class="vs display">VS</div>
+          <div class="col panel hot" id="right">
+            <div class="label muted" id="right-label"></div>
+            <div class="runs display" id="right-runs">0</div>
+            <div class="balls" id="right-balls"></div>
+            <div class="sr muted" id="right-sr"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <script src="assets/base.js"></script>
+    <script>
+      const v = HF.vars;
+      const dur = __DUR__;
+      const sr = (r, b) => (b > 0 ? ((r * 100) / b).toFixed(1) : "-");
+      const tl = gsap.timeline({ paused: true });
+      window.__timelines = window.__timelines || {};
+      window.__timelines["main"] = tl;
+
+      const fx = HF.backdrop(tl, { photo: v.photo, dur });
+      const hero = HF.cutout(v.cutout, HF.portrait
+        ? { left: "15%", width: "70%", top: "330px", height: "470px" }
+        : { left: "0", width: "30%", top: "60px", bottom: "0" });
+      const scene = HF.$("#scene");
+      scene.appendChild(HF.$("#head"));
+      scene.appendChild(HF.$("#cols"));
+      if (!hero && HF.portrait) { HF.$("#cols").style.top = "620px"; }
+      if (!hero && !HF.portrait) { HF.$("#head").style.left = "80px"; HF.$("#cols").style.left = "80px"; }
+
+      HF.text("#player", v.player);
+      HF.text("#tagline", v.tagline);
+      HF.text("#tagline-te", v.tagline_te);
+      HF.text("#left-label", v.left_label);
+      HF.text("#right-label", v.right_label);
+      HF.text("#left-balls", v.left_balls + " BALLS");
+      HF.text("#right-balls", v.right_balls + " BALLS");
+      HF.text("#left-sr", "SR " + sr(v.left_runs, v.left_balls));
+      HF.text("#right-sr", "SR " + sr(v.right_runs, v.right_balls));
+      HF.afterFonts(() => HF.fit(HF.$("#player")));
+
+      HF.flash(tl, fx, 0);
+      tl.from("#player", { y: 80, opacity: 0, duration: 0.4, ease: "back.out(1.6)" }, 0.1)
+        .from("#tagline", { opacity: 0, scaleX: 1.4, duration: 0.45, ease: "power2.out" }, 0.35)
+        .from("#tagline-te", { opacity: 0, y: 20, duration: 0.4 }, 0.5);
+      if (hero) tl.from(hero, { y: 160, opacity: 0, duration: 0.55, ease: "power3.out" }, 0.2).to(hero, { scale: 1.05, duration: dur - 0.8, ease: "none" }, 0.75);
+      tl.from("#left", { y: 120, opacity: 0, duration: 0.45, ease: "power3.out" }, 0.8)
+        .to("#left-runs", { innerText: v.left_runs, snap: { innerText: 1 }, duration: 0.8, ease: "power1.out" }, 0.9)
+        .from(".vs", { scale: 0, opacity: 0, duration: 0.3, ease: "back.out(2)" }, 1.2)
+        .from("#right", { y: 120, opacity: 0, duration: 0.45, ease: "power3.out" }, 1.3)
+        .to("#right-runs", { innerText: v.right_runs, snap: { innerText: 1 }, duration: 1.0, ease: "power1.out" }, 1.4)
+        .fromTo("#right", { scale: 1 }, { scale: 1.07, duration: 0.15, yoyo: true, repeat: 1, ease: "power1.inOut" }, 2.4);
+      HF.shake(tl, "#scene", 2.4, 12);
+      HF.sweep(tl, fx, 2.6);
+      tl.to("#scene", { opacity: 0, duration: 0.3 }, dur - 0.3);
+      tl.seek(0);
+    </script>
+  </body>
+</html>
