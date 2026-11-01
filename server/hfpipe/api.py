@@ -10,13 +10,14 @@ from fastapi import Depends, FastAPI, File, Form, Header, HTTPException, Request
 from fastapi.responses import FileResponse, HTMLResponse
 from pydantic import BaseModel
 
-from . import config, pipeline, planner, render, store, usage
+from . import config, pipeline, planner, render, store, usage, voice
 from .media import probe, to_png
 from .models import ORIENT, Job, Plan
 from .plan import normalize, slug
 from .srt import parse_srt
 
 VIDEO_EXT = {".mp4", ".mov", ".m4v"}
+SCREENSHOT_SIDE = 2800  # voice videos zoom right into screenshots, so they keep their detail
 DASHBOARD = Path(__file__).with_name("dashboard.html")
 
 
@@ -50,11 +51,12 @@ def view(job: Job) -> dict[str, Any]:
     assets = []
     if job.plan:
         for a in job.plan.assets_needed:
-            in_library = (config.LIBRARY / f"{a.slot}.png").exists()
+            in_library = job.mode != "voice" and (config.LIBRARY / f"{a.slot}.png").exists()
             assets.append({**a.model_dump(), "in_library": in_library, "ready": bool(a.file) or in_library})
     out["assets"] = assets
     out["missing_assets"] = [a["slot"] for a in assets if not a["ready"]]
-    out["templates"] = render.available_templates()
+    out["templates"] = ["story", "screen"] if job.mode == "voice" else render.available_templates()
+    out["limits"] = usage.job_limits(job.id)
     return out
 
 
@@ -80,13 +82,17 @@ def create_job(
     provider: str = Form(""),
     tighten: bool = Form(False),
     style: str = Form(""),
+    mode: str = Form("talking"),
 ) -> dict[str, Any]:
+    is_voice = mode == "voice"
     ext = Path(video.filename or "video.mp4").suffix.lower()
-    if ext not in VIDEO_EXT:
-        raise HTTPException(400, f"video must be one of {sorted(VIDEO_EXT)}")
+    if ext not in (voice.AUDIO_EXT if is_voice else VIDEO_EXT):
+        raise HTTPException(400, f"file must be one of {sorted(voice.AUDIO_EXT if is_voice else VIDEO_EXT)}")
     wanted = [r.strip() for r in ratios.split(",") if r.strip()]
     if not wanted or any(r not in ORIENT for r in wanted):
         raise HTTPException(400, "ratios must be 9:16 and/or 16:9")
+    if is_voice and len(wanted) > 1:
+        raise HTTPException(400, "a voice video is made for one ratio")
     cues = parse_srt(captions.file.read().decode("utf-8", errors="replace"))
     if not cues:
         raise HTTPException(400, "captions file has no SRT cues")
@@ -103,8 +109,11 @@ def create_job(
         shutil.rmtree(jdir, ignore_errors=True)
         raise HTTPException(400, "video has no audio track")
     provider = provider if provider in config.PROVIDERS else config.PLANNER_PROVIDER
-    job = store.save(Job(id=job_id, ratios=wanted, video=info, captions=cues, script=script, provider=provider, tighten=tighten,
-                         style=style if style in planner.styles() else ""))  # type: ignore[arg-type]
+    if is_voice:  # scene writing and review run through Claude Code
+        provider = "claude"
+    job = store.save(Job(id=job_id, ratios=wanted, video=info, captions=cues, script=script, provider=provider,
+                         tighten=tighten and not is_voice, style=style if style in planner.styles() else "",
+                         mode="voice" if is_voice else "talking"))  # type: ignore[arg-type]
     if auto_plan:
         job = pipeline.set_status(job, "planning")
         pipeline.submit(pipeline.plan, job_id, "", True, provider)
@@ -139,8 +148,8 @@ def replan(job_id: str, body: PlanRequest) -> dict[str, Any]:
     if body.style is not None and (body.style == "" or body.style in planner.styles()):
         job.style = body.style
     if body.remember and body.notes.strip():
-        planner.remember(body.notes)
-    if body.provider in config.PROVIDERS:
+        (voice.remember if job.mode == "voice" else planner.remember)(body.notes)
+    if body.provider in config.PROVIDERS and job.mode != "voice":
         job.provider = body.provider
     job = pipeline.set_status(job, "planning")
     pipeline.submit(pipeline.plan, job_id, body.notes, body.fresh, job.provider, body.revise and job.plan is not None)
@@ -171,6 +180,10 @@ def edit_scene(job_id: str, scene_id: str, patch: ScenePatch) -> dict[str, Any]:
         changes["needs_input"] = [k for k in scene.needs_input if k not in patch.data]  # type: ignore[operator]
     updated = scene.model_copy(update=changes)
     scenes = [updated if s.id == scene_id else s for s in job.plan.scenes]
+    if job.mode == "voice":  # beats keep their timing: only the brief, images and on/off change here
+        job.plan = job.plan.model_copy(update={"scenes": scenes})
+        job.status = "planned"
+        return view(store.save(job))
     try:
         job.plan = normalize(Plan(scenes=scenes, assets_needed=job.plan.assets_needed), job.video.duration_us / 1e6)
     except ValueError as e:
@@ -184,6 +197,8 @@ def upload_asset(job_id: str, slot: str, photo: UploadFile = File(...), save_to_
     job = _job(job_id)
     _editable(job)
     assert job.plan is not None
+    if job.mode == "voice":  # these are one video's screenshots, not reusable portraits
+        save_to_library = False
     slot = slug(slot)
     entry = next((a for a in job.plan.assets_needed if a.slot == slot), None)
     if entry is None:
@@ -195,7 +210,7 @@ def upload_asset(job_id: str, slot: str, photo: UploadFile = File(...), save_to_
     with tempfile.TemporaryDirectory() as tmp:
         raw = _save_upload(photo, Path(tmp) / f"upload{ext}")
         try:
-            to_png(raw, jdir / "assets" / f"{slot}.png")
+            to_png(raw, jdir / "assets" / f"{slot}.png", *([SCREENSHOT_SIDE] if job.mode == "voice" else []))
         except Exception as e:  # noqa: BLE001
             raise HTTPException(400, f"could not read photo: {e}") from e
     entry.file = f"assets/{slot}.png"
@@ -210,7 +225,7 @@ def start_render(job_id: str) -> dict[str, Any]:
     job = _job(job_id)
     _editable(job)
     job = pipeline.set_status(job, "rendering")
-    pipeline.submit(pipeline.render_and_export, job_id)
+    pipeline.submit(pipeline.render_and_review, job_id)
     return view(job)
 
 

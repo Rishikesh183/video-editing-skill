@@ -31,6 +31,7 @@ ORANGE, YELLOW, INK = "#FF7A1A", "#FFD23F", "#111111"
 POLAROID = {"border": 10.0, "bottom": 34.0, "color": "#FFFFFF", "shadowOpacity": 0.55, "shadowBlur": 18.0,
             "shadowX": 0.0, "shadowY": 10.0, "shadowColor": "#000000"}
 SLIDE_US = 500_000  # entrances: long enough to read as a glide, not a jump
+STRAP_CLEARANCE = 0.085  # from the strap's centre to the top of the head, with its sub-line in between
 
 AddMedia = Callable[[str], str | None]
 Box = tuple[float, float, float, float]
@@ -69,15 +70,15 @@ def _point(preset: str, at: int, duration: int, amount: float, length: int) -> l
 
 def _ken_burns(length: int, direction: str = "right", strength: str = "standard",
                focus_pull: bool = False) -> list[dict[str, Any]]:
-    """Zoom + pan across the clip (1.0→1.15 subtle, →1.3 standard). A focus pull starts blurred and
-    sharpens over 0.5 s, the way editors land a photo instead of just cutting to it."""
+    """Zoom + pan across the clip (1.0→1.15 subtle, →1.3 standard). A focus pull starts faint and settles
+    over 0.5 s, the way editors land a photo instead of just cutting to it. No blur: on a phone it costs frames."""
     s0, s1 = (1.12, 1.22) if strength == "subtle" else (1.15, 1.32)
     a, b = (0.45, 0.55) if direction == "right" else (0.55, 0.45)
     keys = [{"timeUs": 0, "scale": s0, "x": a, "easing": "ease_out"}]
     pull = min(500_000, length // 3)
     if focus_pull and pull > 0:
         u = pull / length
-        keys[0].update(blur=0.8, opacity=0.4)
+        keys[0].update(opacity=0.4)
         keys.append({"timeUs": pull, "scale": round(s0 + (s1 - s0) * u, 4), "x": round(a + (b - a) * u, 4),
                      "easing": "linear"})
     keys.append({"timeUs": length, "scale": s1, "x": b})
@@ -88,8 +89,6 @@ def _photo_clip(cid: str, source_id: str, length: int, direction: str, blurred: 
     effects: dict[str, Any] = {"look": "cricket", "lookAmount": 0.7}
     if blurred:
         effects.update({"effect": "blur", "effectAmount": 0.8, "brightness": -0.35})
-    else:
-        effects.update({"effect": "light_leak", "effectAmount": 0.3})
     clip = {"id": cid, "sourceId": source_id, "inUs": 0, "outUs": length, "muted": True,
             "keys": _ken_burns(length, direction, "subtle" if blurred else "standard", focus_pull=not blurred),
             "effects": effects}
@@ -129,7 +128,6 @@ def _stage(scene: Scene, length: int, direction: str, portrait: bool, index: int
     source = media.decor(f"stage_{palette}_{'portrait' if portrait else 'landscape'}")
     a, b = (0.48, 0.52) if direction == "right" else (0.52, 0.48)
     return {"id": f"bg-{scene.id}", "sourceId": source, "inUs": 0, "outUs": length, "muted": True,
-            "effects": {"effect": "noise", "effectAmount": 0.1},
             "keys": [{"timeUs": 0, "scale": 1.06, "x": a, "easing": "ease_in_out"},
                      {"timeUs": length, "scale": 1.14, "x": b}]}
 
@@ -144,7 +142,7 @@ def _visual_below(scene: Scene, start: int, end: int, portrait: bool, top: float
     m = Moment()
     data = scene.data
     if data.get("players"):
-        m = _player_cutouts(scene, start + 350_000, end, portrait, media, max_h=1.0 - top)
+        m = _player_cutouts(scene, start + 350_000, end, portrait, media, max_h=1.0 - top, fill=True)
         if m.images:
             return m
     photo = media.photo(str(data["photo"])) if data.get("photo") else None
@@ -183,11 +181,13 @@ def _plate(background: str, padding: float = 12.0) -> dict[str, Any]:
             "strokeColor": "#000000", "strokeWidth": 0.0}
 
 
-def _kicker(scene: Scene, start: int, end: int, y: float) -> list[dict[str, Any]]:
+def _kicker(scene: Scene, start: int, end: int, y: float, portrait: bool = True) -> list[dict[str, Any]]:
     text = str(scene.data.get("kicker") or "").strip()
     if not text:
         return []
-    return [_title(f"kk-{scene.id}", text[:40], start, end, y, 22.0, color=INK, wrapWidth=0.8, font=LABEL,
+    # The plate is as wide as its wrap width, so it hugs the word rather than spanning the frame.
+    width = _text_px(text[:40].upper(), 22.0, LABEL) / (720 * (9 / 16 if portrait else 16 / 9)) + 0.09
+    return [_title(f"kk-{scene.id}", text[:40], start, end, y, 22.0, color=INK, wrapWidth=round(min(0.8, width), 4), font=LABEL,
                    decoration=_plate(YELLOW), entrance={"preset": "slide_down", "durationUs": SLIDE_US})]
 
 
@@ -388,7 +388,7 @@ def _text_block(scene: Scene, start: int, end: int, portrait: bool, centre: floa
             hit = at + reveal - 60_000 - clip_start
             main_clip["pointEffects"] = (main_clip.get("pointEffects", []) + _point("flash", hit, 200_000, 0.5, length)
                                          + _point("shake", hit, 380_000, 0.6, length))
-    m.titles += _kicker(scene, start + 100_000, end, round(top - 0.055, 4))
+    m.titles += _kicker(scene, start + 100_000, end, round(top - 0.055, 4), portrait)
     m.titles.append(_title(f"tp-{scene.id}", text, at, end, round(main_y, 4), size, entrance=entrance))
 
     if highlight:
@@ -414,17 +414,36 @@ def _me(scene_id: str, start: int, length: int, aspect: float, portrait: bool, k
             "muted": True, "cutout": {"mode": "people"}, "keys": keys}
 
 
-def face_aside(scene_id: str, start: int, length: int, portrait: bool, aspect: float) -> dict[str, Any]:
-    """Full size, then a smooth shrink to the side, hold while the photo plays, and grow back."""
-    shrink = min(900_000, length // 3)  # smooth, not a snap
-    back = min(600_000, length // 4)
-    # Shrunk into the bottom-left corner, flush with both edges: the frame's bottom (where the body is cut
-    # off) sits on the canvas bottom, so no strip of background shows under the creator.
+def aside_pose(portrait: bool, aspect: float) -> dict[str, float]:
+    """Shrunk into the bottom-left corner, flush with both edges: the frame's bottom (where the body is cut off)
+    sits on the canvas bottom, so no strip of background shows under the creator."""
     canvas = 9 / 16 if portrait else 16 / 9
     full_w = min(1.0, aspect / canvas)
     full_h = full_w * canvas / aspect  # the layer's height as a fraction of the canvas height
     s = 0.58 if portrait else 0.82
-    side = {"scale": s, "x": round(s * full_w / 2, 4), "y": round(1 - s * full_h / 2, 4)}
+    return {"scale": s, "x": round(s * full_w / 2, 4), "y": round(1 - s * full_h / 2, 4)}
+
+
+def strap_height(face: Box | None, portrait: bool, aspect: float) -> float:
+    """Where a name strap goes while the creator is shrunk aside: the usual lower third unless that lands on their
+    face, and then above their head. `face` is on the canvas at full size; it shrinks with the creator."""
+    usual, above_typical_head = (0.7, 0.42) if portrait else (0.72, 0.3)
+    if face is None:
+        return above_typical_head if portrait else usual
+    pose = aside_pose(portrait, aspect)
+    top, bottom = (pose["y"] + (v - 0.5) * pose["scale"] for v in (face[1], face[3]))
+    right = pose["x"] + (face[2] - 0.5) * pose["scale"]
+    if not portrait and right < 0.44:  # in 16:9 the strap sits beside the creator
+        return usual
+    hair = (bottom - top) * 0.45
+    return round(max(0.2, top - hair - STRAP_CLEARANCE), 4)
+
+
+def face_aside(scene_id: str, start: int, length: int, portrait: bool, aspect: float) -> dict[str, Any]:
+    """Full size, then a smooth shrink to the side, hold while the photo plays, and grow back."""
+    shrink = min(900_000, length // 3)  # smooth, not a snap
+    back = min(600_000, length // 4)
+    side = aside_pose(portrait, aspect)
     home = {"scale": 1.0, "x": 0.5, "y": 0.5}
     return _me(scene_id, start, length, aspect, portrait, [
         {"timeUs": 0, **home, "easing": "hold"},
@@ -486,7 +505,7 @@ def _text_behind(scene: Scene, start: int, length: int, portrait: bool, aspect: 
         {"timeUs": settle, **low, "easing": "linear"},
         {"timeUs": length - back, **low, "easing": "ease_in_out"},
         {"timeUs": length, **home}]))
-    m.titles += _kicker(scene, start + 100_000, end, round(top - 0.04, 4))
+    m.titles += _kicker(scene, start + 100_000, end, round(top - 0.04, 4), portrait)
     m.cues += [(start, "whoosh", 0.5), (at + 300_000, "impact", 0.55)]
     return m
 
@@ -520,8 +539,9 @@ def _height(media: Media, source_id: str, width: float) -> float:
 
 
 def _player_cutouts(scene: Scene, start: int, end: int, portrait: bool, media: Media,
-                    max_h: float = 0.62) -> Moment:
-    """Players (background removed) rise from the bottom edge beside the creator, one after another."""
+                    max_h: float = 0.62, fill: bool = False) -> Moment:
+    """Players (background removed) rise from the bottom edge, one after another: beside the creator, or with `fill`
+    as big as the free space allows on a stage, so the frame never looks empty."""
     m = Moment()
     slots = [str(s) for s in (scene.data.get("players") or [scene.data.get("photo")]) if s][:2]
     ids = [c for c in (media.cutout(s) for s in slots) if c]
@@ -529,11 +549,16 @@ def _player_cutouts(scene: Scene, start: int, end: int, portrait: bool, media: M
         return m
     xs = ([0.27, 0.73] if len(ids) == 2 else [0.72]) if portrait else ([0.2, 0.8] if len(ids) == 2 else [0.82])
     width = (0.5 if len(ids) == 2 else 0.56) if portrait else 0.26
+    if fill and len(ids) == 1:
+        xs = [0.5]
+    widest = (0.6 if len(ids) == 2 else 0.94) if portrait else (0.34 if len(ids) == 2 else 0.5)
     for i, source_id in enumerate(ids):
         at = start + i * 400_000
         if end - at < 800_000:
             break
-        if _height(media, source_id, width) > max_h:
+        if fill:
+            width = min(widest, max_h / max(1e-6, _height(media, source_id, 1.0)))
+        elif _height(media, source_id, width) > max_h:
             width *= max_h / _height(media, source_id, width)
         h = _height(media, source_id, width)
         m.images.append({
@@ -772,8 +797,8 @@ def build(scene: Scene, start: int, length: int, portrait: bool, aspect: float, 
         m.main = _photo_clip(f"bg-{scene.id}", photo, length, direction)
         if kind == "photo-behind":
             m.images.append(face_aside(scene.id, start, length, portrait, aspect))
-            imgs, titles, cues = _lower_third(scene, start + 500_000, end, portrait,
-                                              0.64 if portrait else 0.68, 0.7 if portrait else 0.72, media)
+            imgs, titles, cues = _lower_third(scene, start + 500_000, end, portrait, 0.64 if portrait else 0.68,
+                                              strap_height(media.face(start, end), portrait, aspect), media)
             m.cues += [(start, "shutter", 0.45), (start + 150_000, "whoosh", 0.55), (max(start, end - 600_000), "whip", 0.4)]
         else:
             imgs, titles, cues = _lower_third(scene, start, end, portrait, 0.5, 0.7 if portrait else 0.72, media)
@@ -894,7 +919,7 @@ def build(scene: Scene, start: int, length: int, portrait: bool, aspect: float, 
                                0.82 if portrait else 0.87, 0.74 if portrait else 0.75, media)
             m.images = imgs + m.images
             m.cues += cues
-        m.titles += _kicker(scene, start + 100_000, end, y - size * 0.75 / 720 - 0.05)
+        m.titles += _kicker(scene, start + 100_000, end, y - size * 0.75 / 720 - 0.05, portrait)
         m.titles.append(_title(f"st-{scene.id}", final, at, end, y, size, color=YELLOW, wrapWidth=0.95, font=DISPLAY,
                                entrance={"preset": "count_up", "durationUs": count},
                                counter={"from": 0.0, "to": value, "decimals": decimals, "prefix": prefix, "suffix": suffix},

@@ -19,16 +19,21 @@ from .store import job_dir
 
 MIN_CLIP_US = 50_000
 OUTPUT_FPS = 30
+FRAME_US = 33_334
+SOUND_GAP_US = 1_800_000  # at most one sound effect in this span: they support the voice, not compete with it
 VIDEO_ID = "video-src"
 SILENT_ID = "video-src-silent"
-# Graphics open with their own flash, so only the return to the face gets a (soft) join effect;
-# two visuals back to back get a whip push with a whip sound.
-OUT_TRANSITION = "zoom_fade"
-TRANSITION_US = 400_000  # long enough to read as a glide, not a jolt
-# Visual->visual joins use the same zoom fade: it reads smoother than a push; the whip sound marks the cut.
-WHIP_TRANSITION = "zoom_fade"
-WHIP_US = 400_000
-FLASH_US = 320_000
+# Joins are the edit's punctuation: a zoom punch into a graphic, a flash into a reveal, whips out of it. They run half a
+# duration each side of the cut, so nothing overlaps and timing never moves.
+PUNCH_IN = "zoom_punch"
+PUNCH_US = 420_000
+WHIPS = ("whip_left", "whip_right", "whip_up", "whip_down")
+WHIP_US = 360_000
+GLITCH = "glitch_cut"
+GLITCH_US = 300_000
+GLITCH_EVERY = 3  # every third graphic-to-graphic join, so whips do not become a pattern
+FLASH = "flash_zoom"
+FLASH_US = 400_000
 FLASH_IN = {"photo-full", "news-cards", "photo-frames"}  # reveals that open on a white flash
 # Jump zooms on the talking head: wide and tight framings alternate at caption boundaries.
 TIGHT_SCALE = 1.1  # a gentle punch-in; bigger jumps read as rough cuts
@@ -73,17 +78,19 @@ def _display_aspect(info: MediaInfo) -> float:
     return w / h if h else 1.0
 
 
-def _face_clip(cid: str, start: int, end: int, tight: bool = False) -> dict[str, Any]:
+def _face_clip(cid: str, start: int, pieces: list[tuple[int, int, bool]]) -> dict[str, Any]:
+    """A face stretch as ONE clip whose framing jumps by keyframe. Separate clips look the same but make the phone
+    restart the video decoder at every jump, and the preview freezes on each one."""
+    end = pieces[-1][1]
     clip: dict[str, Any] = {"id": cid, "sourceId": VIDEO_ID, "inUs": start, "outUs": end, "muted": True}
-    dur = end - start
-    if tight:  # punch-in: same take, closer framing, cut on a sentence boundary
-        clip["keys"] = [{"timeUs": 0, "scale": TIGHT_SCALE, "easing": "linear"},
-                        {"timeUs": dur, "scale": TIGHT_SCALE + 0.03}]
-    elif dur >= 2_000_000:  # slow push keeps long talking-head stretches alive
-        clip["keys"] = [
-            {"timeUs": 0, "scale": 1.0, "easing": "ease_in_out"},
-            {"timeUs": dur, "scale": 1.06},
-        ]
+    keys: list[dict[str, Any]] = []
+    for s, e, tight in pieces:
+        # Punch-in: closer framing on a sentence boundary. Otherwise a slow push keeps long stretches alive.
+        first, last = (TIGHT_SCALE, TIGHT_SCALE + 0.03) if tight else (1.0, 1.06 if e - s >= 2_000_000 else 1.0)
+        at, until = s - start, (e - start) - (0 if e == end else FRAME_US)
+        keys += [{"timeUs": at, "scale": first, "easing": "ease_in_out"}, {"timeUs": until, "scale": last, "easing": "hold"}]
+    if any(k["scale"] != 1.0 for k in keys):
+        clip["keys"] = keys
     return clip
 
 
@@ -157,6 +164,25 @@ def _fit_still_durations(clips: list[dict[str, Any]], sources: list[dict[str, An
     for s in sources:
         if s["mime"].startswith("image/"):
             s["durationUs"] = max(STILL_MIN_US, longest.get(s["id"], 0))
+
+
+def _main_subject(im: Any) -> Any:
+    """Only the biggest shape of a cut-out. A collage or a second person in the photo otherwise floats beside the
+    player as a torn fragment."""
+    import cv2
+    import numpy as np
+
+    rgba = np.array(im)
+    solid = (rgba[:, :, 3] > 24).astype(np.uint8)
+    joined = cv2.morphologyEx(solid, cv2.MORPH_CLOSE, np.ones((9, 9), np.uint8))  # a bat held clear of the body stays on
+    count, labels, stats, _ = cv2.connectedComponentsWithStats(joined, connectivity=8)
+    if count <= 2:
+        return im
+    biggest = 1 + int(np.argmax(stats[1:, cv2.CC_STAT_AREA]))
+    rgba[labels != biggest, 3] = 0
+    from PIL import Image
+
+    return Image.fromarray(rgba)
 
 
 def _silent_copy(video: Path, dest: Path) -> Path:
@@ -317,7 +343,7 @@ def build(job: Job, ratio: Ratio) -> tuple[dict[str, Any], list[dict[str, Any]],
             from PIL import Image
 
             with Image.open(cut) as im:
-                im = im.convert("RGBA")
+                im = _main_subject(im.convert("RGBA"))
                 box = im.getchannel("A").point(lambda a: 255 if a > 24 else 0).getbbox()
                 trimmed.parent.mkdir(parents=True, exist_ok=True)
                 (im.crop(box) if box else im).save(trimmed)
@@ -358,10 +384,12 @@ def build(job: Job, ratio: Ratio) -> tuple[dict[str, Any], list[dict[str, Any]],
 
     def add_face(a: int, b: int) -> None:
         nonlocal tight_prev
+        pieces = []
         for s, e, tight in _face_pieces(a, b, punches, beats):
             tight = (not tight_prev) if tight is None else tight
-            clips.append(_face_clip(f"face-{len(clips)}", s, e, tight))
+            pieces.append((s, e, tight))
             tight_prev = tight
+        clips.append(_face_clip(f"face-{len(clips)}", a, pieces))
 
     for index, scene in enumerate(fullframes):
         start, end = us(scene.start), min(us(scene.end), total)
@@ -408,17 +436,30 @@ def build(job: Job, ratio: Ratio) -> tuple[dict[str, Any], list[dict[str, Any]],
     elif total > cursor:
         warnings.append(f"tail of {total - cursor}us dropped")
     boundary = 0
+    whips = 0
+    between_visuals = 0
+
+    def next_whip() -> str:
+        nonlocal whips
+        whips += 1
+        return WHIPS[(whips - 1) % len(WHIPS)]
+
     for left, right in zip(clips, clips[1:]):
         boundary += left["outUs"] - left["inUs"]
-        if left["id"].startswith("face-"):
-            if right["id"] in flash_ids:  # face -> photo reveal: quick white flash (jump zooms stay hard cuts)
-                left["transition"] = {"rightId": right["id"], "preset": "flash_white", "durationUs": FLASH_US}
+        if right["id"].startswith("face-") and left["id"].startswith("face-"):
+            continue  # jump zooms stay hard cuts
+        # The creator shrinking into a picture is its own move: the picture simply appears behind them.
+        if any(i["id"].startswith("me-") and abs(i["startUs"] - boundary) < MIN_CLIP_US for i in images):
             continue
-        if right["id"].startswith("face-"):
-            left["transition"] = {"rightId": right["id"], "preset": OUT_TRANSITION, "durationUs": TRANSITION_US}
-        else:  # visual straight into visual: whip pan
-            left["transition"] = {"rightId": right["id"], "preset": WHIP_TRANSITION, "durationUs": WHIP_US}
-            sfx_cues.append((max(0, boundary - WHIP_US // 2), "whip", 0.45))
+        if left["id"].startswith("face-"):
+            preset, length = (FLASH, FLASH_US) if right["id"] in flash_ids else (PUNCH_IN, PUNCH_US)
+        elif right["id"].startswith("face-"):
+            preset, length = next_whip(), WHIP_US
+        else:
+            between_visuals += 1
+            preset, length = (GLITCH, GLITCH_US) if between_visuals % GLITCH_EVERY == 0 else (next_whip(), WHIP_US)
+            sfx_cues.append((max(0, boundary - length // 2), "whip", 0.45))
+        left["transition"] = {"rightId": right["id"], "preset": preset, "durationUs": length}
     project_len = sum(c["outUs"] - c["inUs"] for c in clips)
 
     for moment in overlay_moments:
@@ -470,7 +511,7 @@ def build(job: Job, ratio: Ratio) -> tuple[dict[str, Any], list[dict[str, Any]],
                 i.pop("volume", None)
     music = [{"id": "voice", "sourceId": VIDEO_ID, "inUs": 0, "startUs": 0, "endUs": project_len, "volume": 1.0}]
     # The opening stays clean: the hook is the creator's voice, no whooshes or booms under it.
-    cues = sorted(c for c in sfx_cues if QUIET_OPENING_US <= c[0] < project_len - MIN_CLIP_US)
+    cues = sfx.calm([c for c in sfx_cues if QUIET_OPENING_US <= c[0] < project_len - MIN_CLIP_US], SOUND_GAP_US)
     if len(cues) <= MAX_MUSIC - 1:
         # One audio item per sound: each can be moved, re-timed or muted by hand.
         sfx_dir = sfx.library()
@@ -513,7 +554,12 @@ def validate(project_file: Path, sources_file: Path) -> dict[str, Any]:
 
 
 def export_bundle(job: Job, ratio: Ratio) -> tuple[str, list[str]]:
-    project, sources, files, warnings = build(job, ratio)
+    if job.mode == "voice":
+        from . import voice
+
+        project, sources, files, warnings = voice.build(job, ratio)
+    else:
+        project, sources, files, warnings = build(job, ratio)
     stage = job_dir(job.id) / "exports" / ORIENT[ratio]
     stage.mkdir(parents=True, exist_ok=True)
     (stage / "project.json").write_text(json.dumps(project, indent=2, ensure_ascii=False), encoding="utf-8")

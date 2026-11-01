@@ -27,8 +27,10 @@ are appended at the bottom when the creator ticks "Remember this" on a re-plan n
 
 ## Timing and motion
 - A visual about a person starts when he is NAMED and stays while he is discussed, not 2 s early.
-- Smooth, eye-catching motion; nothing snaps. Every entrance has a matching sound, but no sound effects
-  in the first 3.5 s (the hook is the creator's voice).
+- Smooth, eye-catching motion; nothing snaps. Sound effects are sparse and quiet: too many are disturbing, so only
+  the moments that matter get one, and none in the first 3.5 s (the hook is the creator's voice).
+- Text never covers the creator's face, including when they are cut out and shrunk over a photo.
+- The frame is full: on a stage the picture fills the space under the words. Empty stretches of background look unfinished.
 - When the creator is cut out and shrunk, he sits in the bottom-left corner with no gap below.
 
 ## Re-plans

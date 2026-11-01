@@ -9,7 +9,7 @@ from .config import tool
 from .models import MediaInfo
 
 _MIME = {".mp4": "video/mp4", ".mov": "video/quicktime", ".m4v": "video/mp4", ".png": "image/png", ".jpg": "image/jpeg",
-         ".wav": "audio/wav"}
+         ".wav": "audio/wav", ".m4a": "audio/mp4"}
 
 
 def probe(path: Path) -> MediaInfo:

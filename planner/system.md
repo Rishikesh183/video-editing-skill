@@ -50,8 +50,8 @@ Choosing the visual (match the words):
 - A single number said aloud (runs, wickets, price, years) -> stat-hero if it is THE number of the video,
   else stat-count (or split with value when he is explaining the number rather than revealing it).
   Give stat-hero 2-3 "facts" — short context said in the video (overs, rate, record) — so it is rich.
-- Pace like the best cricket explainers: a new visual or sound every 1.5-3 s during analysis, every 3-5 s
-  otherwise. Sounds are added automatically for every entrance.
+- Pace like the best cricket explainers: a new visual every 1.5-3 s during analysis, every 3-5 s
+  otherwise. A few sounds are added automatically; do not plan around them.
 - Several numbers about one innings/team -> a rendered data card.
 - A date, verdict or punchline -> text-punch (use "highlight" for the key 1-3 words, e.g.
   text "Auction on", highlight "15 Nov").

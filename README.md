@@ -105,7 +105,8 @@ To add a template, write `template.html`, add its cues to `cues.py` and its fiel
 
 - **Plans**: identical captions + script + notes + library reuse `data\plan-cache\` with no Claude call. *Re-plan* in
   the app always asks Claude again.
-- **Renders**: same template + data + photos + sounds reuse `dataender-cache\`.
+- **Renders**: same template + data + photos + sounds reuse `data
+ender-cache\`.
 - **Cut-outs**: one per photo, `data\cutouts\`.
 - Downloading or re-importing a bundle never calls Claude.
 
@@ -125,14 +126,56 @@ cd ..\..\cut-agent; .\gradlew.bat :app:testDebugUnitTest      # app tests incl. 
 - Uploads are converted once to an upright, 30 fps, 1 s-keyframe copy (`upright.mp4`) before planning: phones store
   portrait video sideways with a rotation flag, which shifted the first clip in the app; dense keyframes keep preview smooth.
 
+## Voice videos (no camera)
+
+For explainers where you record only your voice. **Home → Voice video** in the app:
+
+1. Pick the recording. The app makes a project and generates captions with your caption service; tap **Add captions**.
+2. The AI screen opens. Add a script if you have one (it fixes names and spellings), choose 16:9 or 9:16, send to the PC.
+3. Claude plans the beats, picks colours for the script and lists the images it needs. Add them, or skip one: a
+   screen without its image becomes an animated scene.
+4. **Make the video**: Claude writes each scene, the PC renders it, Claude looks at frames of the result and fixes what
+   it finds once. About a minute per scene. Then import: scenes, voice, captions, sounds and music are all editable.
+
+Claude plans and writes through Claude Code on your plan; ChatGPT is not used for this mode (model: `HF_VOICE_MODEL`,
+default `HF_PLANNER_MODEL`). Every call shows on the dashboard. Measured on Sonnet with a Pro plan: a 44 s video took 4% of the 5-hour limit (about $0.43 API-equivalent), a 1:49 video about $0.92.
+
+- Screenshots and photos get a camera move with a ring and callouts. They can be messy: Claude crops tabs and taskbars.
+- Colour themes are in `voice.THEMES`. Sounds are clicks, ticks and pops (`voice.SOUNDS`), no whooshes.
+- Briefs: `planner/voice/` (`system.md` plan, `author.md` + `example.md` scenes, `screen.md` camera, `lessons.md` your
+  standing preferences; **Remember this** adds to it). Scene kit: `templates/_voice/`. Scenes are saved in
+  `data/jobs/<id>/voice/`, and only those whose brief, timing, words, theme or images changed are rewritten.
+- The text limit of 200 captions fits about 7 minutes of speech.
+- Test without the phone: `uv run --project server python scripts/voice_job.py plan voice.m4a captions.srt --script s.txt --id demo`,
+  then `images demo slot=file ...`, then `produce demo`.
+
+## Plan limits per edit
+
+Each job step reads the real 5-hour and weekly usage from Claude Code before and after it runs (one tiny Haiku call each
+way). The app shows what the edit took, and `/dashboard` shows the current levels and the figure per edit. Readings come in
+whole percent, and anything else on the same Claude account during the job counts too.
+
+## Phone preview and joins
+
+- **One video stream in preview.** A second video stream freezes Media3's compositor at clip joins on a Galaxy A15: the sound and
+  timecode run on over a stuck picture, and seeking does not recover it. So preview draws stills as overlays (`TimedPhoto`, which
+  also plays keys, entrances, exits and rounded cards), and a silent moving cut-out shows as one still cut-out on the same keys
+  (`CutoutStill`). Exports use the real layers, so the cut-out moves there. Video layers with sound still take a second stream.
+- **Joins** (`export.py`): zoom punch into a graphic, flash zoom into a photo reveal, whips out of graphics and between them, and a
+  glitch cut on every third graphic-to-graphic join. Jump zooms stay hard cuts, and so does the creator shrinking into a picture.
+  The Punch pack is shader-only and runs half its length each side of the cut, so it adds no stream and moves no timing. New
+  presets need the validator rebuilt: `cd validator; .\gradlew.bat installDist -q`.
+
 ## Getting edits right in fewer rounds
 
 - **Lessons** (`planner/lessons.md`): the creator's standing preferences, read by every plan and review. Tick
   **Remember this for all future videos** on a re-plan note (or `POST /lessons`) to add one.
 - **Update plan** revises the current plan (keeps what works) instead of planning from scratch.
-- **Review & fix on PC**: the planner looks at frames of the rendered edit and at the uploaded photos, lists
-  concrete defects (overlaps, wrapped text, wrong-team photos, screenshots, empty frames), fixes exactly those
-  in one revise + re-render pass, and looks again. About $0.08 per look on Sonnet.
+- **Self-review** runs after every render on Claude plans, and **Review & fix on PC** runs it again on demand. The planner
+  looks at one frame per scene of the PC preview (still frames, it does not watch the video) and at the uploaded photos, and
+  lists concrete defects (overlaps, wrapped text, wrong-team photos, screenshots, empty frames). If it finds any it fixes
+  exactly those in one revise + re-render pass and looks again. A look costs under 1% of the 5-hour limit, and a fix round
+  about 2-3% more, because the plan is written out again.
 - **Styles** (`planner/styles/*.md`): editing styles learned from reference videos, picked per job in the
   app. Make one with `uv run --project server python scripts/learn_style.py ref.mp4 --name my-style`.
 - **Tighten pauses & retakes** (app checkbox): cuts long silences and restarted sentences before planning.

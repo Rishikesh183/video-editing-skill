@@ -3,7 +3,7 @@ from pathlib import Path
 
 import pytest
 
-from hfpipe import config
+from hfpipe import config, usage
 
 
 @pytest.fixture(autouse=True)
@@ -14,6 +14,7 @@ def data_dir(tmp_path, monkeypatch):
     monkeypatch.setattr(config, "USAGE_DB", tmp_path / "usage.db")
     monkeypatch.setattr(config, "RENDER_CACHE", tmp_path / "render-cache")
     monkeypatch.setattr(config, "API_TOKEN", "")
+    monkeypatch.setattr(usage, "reading", lambda: None)  # would call Claude
     return tmp_path
 
 

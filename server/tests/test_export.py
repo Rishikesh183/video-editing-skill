@@ -50,16 +50,17 @@ def test_timeline_keeps_voice_in_sync():
         t += c["outUs"] - c["inUs"]
     assert t == job.video.duration_us
     assert project["music"][0] == {"id": "voice", "sourceId": "video-src", "inUs": 0, "startUs": 0, "endUs": t, "volume": 1.0}
-    assert [m["sourceId"] for m in project["music"][1:]] == ["sfx-whoosh", "sfx-shutter"]  # photo slide-in sounds
+    assert [m["sourceId"] for m in project["music"][1:]] == ["sfx-shutter"]  # one sound for the photo, no rushing air
     assert all(c["muted"] for c in clips if c["sourceId"] == "video-src")
-    assert clips[0]["transition"]["rightId"] == "face-1" and "transition" not in clips[1]
+    assert clips[0]["transition"]["rightId"] == "face-1" and clips[0]["transition"]["preset"].startswith("whip_")
+    assert clips[1]["transition"]["preset"] == "zoom_punch"
     assert project["images"][0]["sourceId"] == "photo-sanju_samson"
     assert project["titles"][0]["text"] == "Sanju Samson"
     captions = [t for t in project["titles"] if t.get("captionGroupId") == "ai-captions"]
     assert [c["text"] for c in captions] == ["NAMAN DHIR", "15 BALLS 42 RUNS"]
     assert captions[1]["startUs"] == 2_000_000 and captions[1]["endUs"] == 4_500_000
     assert project["output"]["cover"] is True
-    assert {s["id"] for s in sources} == {"video-src", "gfx-intro", "gfx-stats", "photo-sanju_samson", "sfx-whoosh", "sfx-shutter"}
+    assert {s["id"] for s in sources} == {"video-src", "gfx-intro", "gfx-stats", "photo-sanju_samson", "sfx-shutter"}
     assert set(files) == {s["path"] for s in sources}
     assert warnings == []
 
@@ -105,7 +106,7 @@ def test_photo_behind_shrinks_face_over_photo():
     assert scales[0] == scales[1] == 1.0 and scales[2] < 1 and scales[-1] == 1.0  # full size, shrink, back
     assert me["keys"][2]["timeUs"] - me["keys"][1]["timeUs"] >= 600_000  # smooth, not a snap
     assert bg["keys"][0]["x"] != bg["keys"][1]["x"] and bg["keys"][1]["scale"] > bg["keys"][0]["scale"]  # pan + zoom
-    assert any(m["sourceId"] == "sfx-whoosh" for m in project["music"])
+    assert not any("whoosh" in m["sourceId"] for m in project["music"])
 
 
 @needs_validator
@@ -149,7 +150,8 @@ def test_native_moments_are_layers_not_renders():
     ov = next(i for i in project["images"] if i["id"] == "ov-ov")
     assert ov["keys"][0]["x"] > 0.5 and ov["keys"][1]["x"] == 0.5  # slides in from the right
     pf = next(c for c in project["clips"] if c["id"] == "bg-pf")
-    assert pf["keys"][0]["blur"] > 0 and pf["pointEffects"][0]["preset"] == "flash"  # focus pull + flash
+    assert "blur" not in pf["keys"][0] and pf["keys"][0]["opacity"] < 1 and pf["pointEffects"][0]["preset"] == "flash"  # settles in + flash
+    assert "effect" not in pf["effects"], "no per-frame shader the phone has to pay for"
     assert project["version"] == 15
 
 
@@ -182,11 +184,46 @@ def test_text_moments_count_slam_and_punch_in():
     assert {e["preset"] for e in sl["pointEffects"]} == {"flash", "shake"}
     assert any(i["id"] == "dc-mk-sl" for i in project["images"])  # marker stroke behind the highlight
     first = project["clips"][0]
-    assert first["id"].startswith("face-") and first["outUs"] == 2_000_000 and first["keys"][0]["scale"] >= export.TIGHT_SCALE > 1.0
+    assert first["id"].startswith("face-") and first["outUs"] == 4_000_000, "the punch-in is keyframed inside one clip"
+    assert first["keys"][0]["scale"] >= export.TIGHT_SCALE > 1.0
+    assert first["keys"][2]["timeUs"] == 2_000_000 and first["keys"][2]["scale"] == 1.0
     # captions step aside under big text
     for t in project["titles"]:
         if t.get("captionGroupId"):
             assert not (t["startUs"] < 7_000_000 and 4_000_000 < t["endUs"]), t
+
+
+def test_a_face_stretch_is_one_clip_with_jumps_inside_it():
+    clip = export._face_clip("f", 2_000_000, [(2_000_000, 5_000_000, False), (5_000_000, 8_000_000, True), (8_000_000, 9_000_000, False)])
+    assert (clip["inUs"], clip["outUs"]) == (2_000_000, 9_000_000)
+    times = [k["timeUs"] for k in clip["keys"]]
+    assert times == sorted(set(times)) and times[-1] == 7_000_000, "the app needs rising key times inside the clip"
+    assert [k["scale"] for k in clip["keys"]][:3] == [1.0, 1.06, export.TIGHT_SCALE]
+
+
+def test_a_short_plain_stretch_needs_no_keys():
+    assert "keys" not in export._face_clip("f", 0, [(0, 1_000_000, False)])
+
+
+def test_a_cut_out_keeps_only_the_main_person():
+    from PIL import Image, ImageDraw
+
+    im = Image.new("RGBA", (200, 300), (0, 0, 0, 0))
+    draw = ImageDraw.Draw(im)
+    draw.rectangle((20, 120, 180, 290), fill=(255, 0, 0, 255))  # the player
+    draw.rectangle((60, 10, 120, 60), fill=(0, 255, 0, 255))  # a fragment of someone else, well clear of them
+    alpha = export._main_subject(im).getchannel("A")
+    assert alpha.getpixel((100, 200)) == 255 and alpha.getpixel((90, 30)) == 0
+
+
+def test_a_bat_close_to_the_body_stays_on():
+    from PIL import Image, ImageDraw
+
+    im = Image.new("RGBA", (200, 300), (0, 0, 0, 0))
+    draw = ImageDraw.Draw(im)
+    draw.rectangle((20, 120, 150, 290), fill=(255, 0, 0, 255))
+    draw.rectangle((154, 100, 180, 290), fill=(0, 255, 0, 255))
+    assert export._main_subject(im).getchannel("A").getpixel((170, 200)) == 255
 
 
 def test_long_face_stretch_gets_jump_zooms():
@@ -207,9 +244,7 @@ def test_native_bundle_passes_app_validator():
     rel, warnings = export.export_bundle(_all_native_job(), "9:16")
     with zipfile.ZipFile(store.job_dir("exp1") / rel) as z:
         project = json.loads(z.read("project.json"))
-    # More sounds than the app's 8 audio items: they share one track instead of being dropped.
     assert len(project["music"]) <= 8
-    assert any(m["id"] == "sfx-bed" for m in project["music"])
 
 
 def _reference_job() -> Job:
@@ -236,7 +271,7 @@ def test_reference_moments(monkeypatch):
     assert len(pills) == 2 and pills[-1]["decoration"]["background"] == "#E10600"
     assert any(t["id"] == "ng-nc-0" and t["font"] == "archivo_black" for t in project["titles"])
     face = next(c for c in project["clips"] if c.get("transition", {}).get("rightId") == "bg-nc")
-    assert face["transition"]["preset"] == "flash_white"
+    assert face["transition"]["preset"] == "flash_zoom"
 
 
 @needs_validator

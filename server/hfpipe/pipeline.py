@@ -4,7 +4,7 @@ import logging
 import traceback
 from concurrent.futures import ThreadPoolExecutor
 
-from . import config, export, media, planner, render, review, store, tighten
+from . import config, export, media, planner, render, review, store, tighten, usage, voice
 from .plan import align_to_mentions, normalize
 from .models import Job
 
@@ -26,6 +26,9 @@ def _fail(job_id: str, exc: BaseException) -> None:
 def prepare(job_id: str) -> None:
     """Swap the upload for an upright, edit-friendly copy (once per job)."""
     job = store.load(job_id)
+    if job.mode == "voice":
+        voice.prepare(job)
+        return
     jdir = store.job_dir(job_id)
     if job.video.file.startswith("upright"):
         before = (jdir / job.video.file).stat().st_mtime
@@ -55,7 +58,17 @@ def plan(job_id: str, notes: str = "", fresh: bool = False, provider: str = "", 
     try:
         prepare(job_id)
         job = store.load(job_id)
-        new_plan = planner.plan_job(job, library_slots(), notes, fresh, provider or job.provider, revise)
+        if job.mode == "voice":
+            with usage.metered(job_id, "plan"):
+                new_plan, captions = voice.plan_job(job, notes, revise)
+            job = store.load(job_id)
+            job.plan, job.captions, job.status, job.error = new_plan, captions, "planned", ""
+            job.renders, job.exports = [], {}
+            job.tightened = voice.gap_note(job)
+            store.save(job)
+            return
+        with usage.metered(job_id, "plan"):
+            new_plan = planner.plan_job(job, library_slots(), notes, fresh, provider or job.provider, revise)
         new_plan = normalize(align_to_mentions(new_plan, job.captions), job.video.duration_us / 1e6)
         job = store.load(job_id)
         job.plan, job.status, job.error = new_plan, "planned", ""
@@ -70,6 +83,10 @@ def render_and_export(job_id: str) -> None:
         prepare(job_id)
         job = store.load(job_id)
         assert job.plan is not None
+        if job.mode == "voice":
+            with usage.metered(job_id, "make"):
+                voice.produce(job_id)
+            return
         results = []
         for ratio in job.ratios:
             for scene in job.plan.scenes:
@@ -90,22 +107,42 @@ def render_and_export(job_id: str) -> None:
         _fail(job_id, e)
 
 
+def render_and_review(job_id: str) -> None:
+    """Render, then look at the result before the creator does. A failed look never costs them the finished edit."""
+    render_and_export(job_id)
+    job = store.load(job_id)
+    if job.mode == "voice" or job.status != "rendered" or job.provider != "claude":  # voice videos review inside produce
+        return
+    review_job(job_id, True)
+    job = store.load(job_id)
+    if job.status == "error" and job.exports:
+        job.status, job.error = "rendered", f"Self-review did not finish: {job.error[-200:]}"
+        store.save(job)
+
+
 def review_job(job_id: str, fix: bool = True) -> None:
     """Look at the rendered edit and the photos; with `fix`, revise the plan for exactly the listed defects,
     re-render, and look once more. One round only: anything still listed is left for the creator."""
     try:
-        job = set_status(store.load(job_id), "reviewing")
-        found = review.review(job, review.bundle_for(job))
-        found["round"] = 1
-        notes = review.fix_notes(found)
-        if fix and found.get("edit_issues"):
-            plan(job_id, notes, True, "", True)
-            if store.load(job_id).status == "error":
-                return
-            render_and_export(job_id)
-            job = set_status(store.load(job_id), "reviewing")
+        job = store.load(job_id)
+        if job.mode == "voice":  # scenes are re-checked and fixed, and the project exported again
+            set_status(job, "reviewing")
+            with usage.metered(job_id, "review"):
+                voice.produce(job_id)
+            return
+        job = set_status(job, "reviewing")
+        with usage.metered(job_id, "review"):
             found = review.review(job, review.bundle_for(job))
-            found["round"] = 2
+            found["round"] = 1
+            notes = review.fix_notes(found)
+            if fix and found.get("edit_issues"):
+                plan(job_id, notes, True, "", True)
+                if store.load(job_id).status == "error":
+                    return
+                render_and_export(job_id)
+                job = set_status(store.load(job_id), "reviewing")
+                found = review.review(job, review.bundle_for(job))
+                found["round"] = 2
         job = store.load(job_id)
         job.review, job.status = found, "rendered"
         store.save(job)

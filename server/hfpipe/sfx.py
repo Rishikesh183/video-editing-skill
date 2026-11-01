@@ -18,7 +18,7 @@ RATE = 44100
 SOUNDS = {
     "whoosh": 0.6, "whip": 0.28, "pop": 0.18, "key": 0.05, "key2": 0.05, "impact": 0.8,
     "riser": 1.2, "shutter": 0.35, "ding": 0.9, "swoosh_up": 0.45, "tick": 0.04, "boom": 1.4, "typing": 2.6,
-    "bat_crack": 0.42, "crowd_cheer": 2.2,
+    "bat_crack": 0.42, "crowd_cheer": 2.2, "click": 0.07, "soft_click": 0.09, "tap": 0.12,
 }
 
 
@@ -50,6 +50,13 @@ def _synth(name: str, seconds: float, seed: int) -> list[float]:
             dt = t - onset
             f = 1900 + 500 * (k % 3)
             s = 0.0 if dt < 0 else (rng.uniform(-1, 1) * 0.6 + math.sin(2 * math.pi * f * dt) * 0.35) * math.exp(-140 * dt)
+        elif name == "click":  # crisp UI click: bright transient over a short plastic body
+            s = (noise * 0.35 * math.exp(-420 * t) + math.sin(2 * math.pi * 2600 * t) * 0.75 * math.exp(-210 * t)
+                 + math.sin(2 * math.pi * 950 * t) * 0.35 * math.exp(-120 * t))
+        elif name == "soft_click":  # the same click, rounded off, for passing changes
+            s = math.sin(2 * math.pi * 1250 * t) * 0.8 * math.exp(-130 * t) + math.sin(2 * math.pi * 420 * t) * 0.35 * math.exp(-85 * t)
+        elif name == "tap":  # a fingertip on glass: low knock with a little top
+            s = math.sin(2 * math.pi * 310 * t) * math.exp(-60 * t) + noise * 0.16 * math.exp(-300 * t)
         elif name == "tick":
             s = (noise * 0.4 + math.sin(2 * math.pi * 3000 * t) * 0.6) * math.exp(-180 * t)
         elif name == "impact":
@@ -98,6 +105,46 @@ def library() -> Path:
 
 
 Cue = tuple[float, str, float]  # (time in seconds, sound name, gain)
+
+
+# Which sound wins when two land close together: payoffs first, then the small clicks that mark an arrival.
+_PRIORITY = ("impact", "boom", "ding", "crowd_cheer", "bat_crack", "shutter", "click", "pop", "tap", "soft_click", "typing", "tick", "key", "key2")
+_RUSHING = {"whoosh", "whip", "swoosh_up", "riser"}
+
+
+def calm(cues: list[Cue], gap: float) -> list[Cue]:
+    """An edit needs far fewer sounds than it has moments. Keeps the strongest cue in every `gap` (same time unit as
+    the cues), and turns rushing air into a quiet click. Order of the result is by time."""
+    softened = [(t, "soft_click", round(g * 0.7, 3)) if name in _RUSHING else (t, name, g) for t, name, g in cues]
+    rank = {name: i for i, name in enumerate(_PRIORITY)}
+    kept: list[Cue] = []
+    for cue in sorted(softened, key=lambda c: (rank.get(c[1], len(rank)), c[0])):
+        if all(abs(cue[0] - other[0]) >= gap for other in kept):
+            kept.append(cue)
+    return sorted(kept)
+
+
+def pulse(seconds: float, dest: Path) -> Path:
+    """A low, steady documentary pulse (procedural, royalty-free): soft kick at 84 bpm over a dark drone."""
+    rate, beat = 48000, 60 / 84
+    frames = bytearray()
+    for i in range(int(seconds * rate)):
+        t = i / rate
+        tb = t % beat
+        kick = math.exp(-tb * 9) * math.sin(2 * math.pi * (52 + 60 * math.exp(-tb * 30)) * tb)
+        tick = 0.12 * math.exp(-((t + beat / 2) % beat) * 40) * math.sin(2 * math.pi * 1800 * t)
+        drone = 0.22 * math.sin(2 * math.pi * 55 * t) + 0.12 * math.sin(2 * math.pi * 82.4 * t + 0.6 * math.sin(2 * math.pi * 0.07 * t))
+        swell = 0.75 + 0.25 * math.sin(2 * math.pi * t / 16)
+        fade = min(1.0, t / 2.0, (seconds - t) / 2.5)
+        value = int(max(-1.0, min(1.0, (0.55 * kick + tick + drone * swell) * 0.5 * fade)) * 32767)
+        frames += struct.pack("<hh", value, value)
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    with wave.open(str(dest), "wb") as w:
+        w.setnchannels(2)
+        w.setsampwidth(2)
+        w.setframerate(rate)
+        w.writeframes(bytes(frames))
+    return dest
 
 
 def bed(cues: list[Cue], duration: float, dest: Path) -> Path:

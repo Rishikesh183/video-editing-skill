@@ -128,7 +128,16 @@
     const claudeWeek = (d.week.claude || {}).cost_usd || 0, claudeSession = (d.session_5h.claude || {}).cost_usd || 0;
     const claudeEdit = jobsWithPlans.length ? jobsWithPlans.reduce((a, j) => a + (j.cost_usd || 0), 0) / jobsWithPlans.length : 0;
     let cards = [];
-    if (cal && cal.weekCost > 0 && cal.sessionCost > 0) {
+    const clock = (s) => s ? new Date(s * 1000).toLocaleString([], { weekday: "short", hour: "numeric", minute: "2-digit" }) : "";
+    const edits = d.jobs.filter((j) => j.limits && j.limits.session_used > 0);
+    const avgSession = edits.length ? edits.reduce((a, j) => a + j.limits.session_used, 0) / edits.length : 0;
+    if (d.limits_now) {
+      const n = d.limits_now;
+      cards = [["Claude 5-hour session", n.session, `resets ${clock(n.session_resets)}` + (edits.length ? ` · edits average ${avgSession.toFixed(1)}%` : "")],
+        ["Claude weekly", n.week, `resets ${clock(n.week_resets)}`]];
+      $("limitNote").textContent = `Real readings from Claude Code, last taken ${n.ts} UTC. Anything else on this Claude account counts too.`;
+      document.querySelector(".calib").hidden = true;
+    } else if (cal && cal.weekCost > 0 && cal.sessionCost > 0) {
       const wRate = cal.week / cal.weekCost, sRate = cal.session / cal.sessionCost;  // % per $
       const wNow = Math.min(100, claudeWeek * wRate), sNow = Math.min(100, claudeSession * sRate);
       const perW = claudeEdit * wRate, perS = claudeEdit * sRate;
@@ -163,10 +172,10 @@
     }).join("");
     $("axisFrom").textContent = days[0].slice(5); $("axisTo").textContent = "today";
 
-    const head = `<tr><th>When</th><th>Video</th><th>Planner</th><th class="num">Plans</th><th class="num">Cached</th><th class="num">Tokens</th><th class="num">Cost</th><th>Status</th></tr>`;
+    const head = `<tr><th>When</th><th>Video</th><th>Planner</th><th class="num">Plans</th><th class="num">Cached</th><th class="num">Tokens</th><th class="num">Cost</th><th class="num">5-hour</th><th class="num">Week</th><th>Status</th></tr>`;
     $("jobs").innerHTML = head + d.jobs.map((j) => `<tr><td>${(j.last_ts || "").slice(0, 16)}</td><td>${j.video || j.job_id}${j.duration_s ? ` · ${j.duration_s}s` : ""}</td>` +
       `<td>${(j.providers || "").split(",").map((p) => `<span class="dot" style="background:var(--${p})"></span>${NAMES[p] || p}`).join(" ")}</td>` +
-      `<td class="num">${j.plans}</td><td class="num">${j.cached}</td><td class="num">${fmt(tok(j))}</td><td class="num">${usd(j.cost_usd)}</td><td>${j.status || ""}${j.exports ? " · exported" : ""}</td></tr>`).join("");
+      `<td class="num">${j.plans}</td><td class="num">${j.cached}</td><td class="num">${fmt(tok(j))}</td><td class="num">${usd(j.cost_usd)}</td><td class="num">${j.limits ? j.limits.session_used + "%" : "-"}</td><td class="num">${j.limits ? j.limits.week_used + "%" : "-"}</td><td>${j.status || ""}${j.exports ? " · exported" : ""}</td></tr>`).join("");
     $("sub").textContent = `${d.edits.jobs} edits · updated ${new Date().toLocaleTimeString()}`;
   }
 

@@ -14,13 +14,14 @@ from . import config, native
 from .cues import cues
 from .models import CANVAS, ORIENT, Job, Ratio, RenderResult, Scene
 from .plan import slug
-from .sfx import finish
+from .sfx import calm, finish
 from .store import job_dir
 
 _VARS_ATTR = re.compile(r"data-composition-variables='(.*?)'", re.S)
 # Scenes the exporter builds natively in the app (no HyperFrames render).
 NATIVE_TEMPLATES = native.NATIVE_FULLFRAME | native.NATIVE_OVERLAY
-RENDER_VERSION = 2  # bump when post-processing changes so cached renders refresh
+RENDER_VERSION = 3  # bump when post-processing changes so cached renders refresh
+SCENE_SOUND_GAP = 1.2  # seconds between sounds inside a rendered graphic
 
 
 class TemplateError(RuntimeError):
@@ -183,7 +184,7 @@ def render_scene(job: Job, scene: Scene, ratio: Ratio) -> RenderResult:
     except (TemplateError, OSError, subprocess.SubprocessError) as e:
         return RenderResult(scene_id=scene.id, ratio=ratio, status="error", detail=f"photo prep failed: {e}"[-800:])
 
-    sounds = cues(scene.template, variables, scene.duration)
+    sounds = calm(cues(scene.template, variables, scene.duration), SCENE_SOUND_GAP)
     key_src = json.dumps([template_html, variables, ratio, scene.duration, shared_fingerprint(), sounds, RENDER_VERSION], sort_keys=True)
     for f in sorted(files.values()):
         key_src += hashlib.sha256(f.read_bytes()).hexdigest()

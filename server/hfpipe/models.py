@@ -58,6 +58,7 @@ class AssetSlot(BaseModel):
 
 class Plan(BaseModel):
     story: str = ""  # the planner's editor notes (beats and pictures), written before the scenes
+    theme: str = ""  # voice videos: colour theme picked to fit the script (voice.THEMES)
     scenes: list[Scene]
     assets_needed: list[AssetSlot] = Field(default_factory=list)
 
@@ -87,3 +88,4 @@ class Job(BaseModel):
     tightened: str = ""  # what tightening removed, for the app (empty until it ran)
     review: dict | None = None  # last self-review: {summary, edit_issues, photo_issues, round}
     style: str = ""  # planner/styles/<style>.md to follow; empty = the house style
+    mode: Literal["talking", "voice"] = "talking"  # voice = a voice recording only; the whole picture is generated

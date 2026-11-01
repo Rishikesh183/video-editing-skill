@@ -163,3 +163,39 @@ def test_review_findings_become_fix_notes():
                               "photo_issues": [{"slot": "travis_head", "problem": "South Africa kit in an Australia slot"}]})
     assert "s9: photos stacked -> use a duel" in notes and "travis_head" in notes
     assert review.fix_notes({"edit_issues": [], "photo_issues": []}) == ""
+
+
+def _rendered_job(monkeypatch, provider="claude"):
+    from hfpipe import pipeline
+    from hfpipe.models import Job, MediaInfo
+
+    job = store.save(Job(id="rev", status="rendered", provider=provider, exports={"9:16": "exports/x.zip"},
+                         video=MediaInfo(file="v.mp4", mime="video/mp4", duration_us=1_000_000)))
+    monkeypatch.setattr(pipeline, "render_and_export", lambda job_id: None)
+    return job, pipeline
+
+
+def test_every_talking_edit_gets_looked_at(monkeypatch):
+    job, pipeline = _rendered_job(monkeypatch)
+    seen = []
+    monkeypatch.setattr(pipeline, "review_job", lambda job_id, fix: seen.append((job_id, fix)))
+    pipeline.render_and_review(job.id)
+    assert seen == [("rev", True)]
+
+
+def test_chatgpt_plans_are_not_reviewed_by_claude(monkeypatch):
+    job, pipeline = _rendered_job(monkeypatch, "codex")
+    monkeypatch.setattr(pipeline, "review_job", lambda job_id, fix: (_ for _ in ()).throw(AssertionError("reviewed")))
+    pipeline.render_and_review(job.id)
+
+
+def test_a_failed_review_keeps_the_finished_edit(monkeypatch):
+    job, pipeline = _rendered_job(monkeypatch)
+
+    def broken(job_id, fix):
+        pipeline._fail(job_id, RuntimeError("session limit reached"))
+
+    monkeypatch.setattr(pipeline, "review_job", broken)
+    pipeline.render_and_review(job.id)
+    done = store.load(job.id)
+    assert done.status == "rendered" and done.exports and "session limit reached" in done.error

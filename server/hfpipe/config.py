@@ -32,6 +32,7 @@ RENDER_CACHE = DATA / "render-cache"
 
 HYPERFRAMES_VERSION = os.environ.get("HF_HYPERFRAMES_VERSION", "0.8.188")
 PLANNER_MODEL = os.environ.get("HF_PLANNER_MODEL", "sonnet")
+VOICE_MODEL = os.environ.get("HF_VOICE_MODEL", PLANNER_MODEL)  # plans and writes the scenes of voice videos
 PLANNER_PROVIDER = os.environ.get("HF_PLANNER_PROVIDER", "claude")  # default when the app does not choose
 PROVIDERS = ("claude", "codex")
 CODEX_BIN = os.environ.get("HF_CODEX_BIN", "codex")

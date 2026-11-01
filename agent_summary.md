@@ -562,3 +562,164 @@ export validator on a golden project, and a mocked Claude client (fixture JSON) 
 - [ ] Self-review ran on rendered frames + photos sheet; listed defects fixed in one revise round.
 - [ ] Usage logged with cost; plan/render caches hit on repeat.
 - [ ] User corrections from this round saved to lessons if they said "remember".
+---
+
+## 12. Additions from the SlideOn editor (built after this doc; adopt them)
+
+These came from shipping the same kind of edits (the Telugu cricket creator, plus a short-form explainer
+reference the owner chose as "how I would edit it"). Everything above still holds; this section adds what
+the pipeline above does not have yet. Numbers are the values that worked.
+
+### 12.1 Pick an editing style before planning
+The model first returns the genre and the *purpose* (inform, teach, persuade, entertain, celebrate). Code maps
+them to a style, and only that style's rules go into the prompt:
+- **informative**: sports, history, and any talking head whose purpose is to inform, teach or persuade.
+  It gets everything in 12.2 to 12.7.
+- **conversational** (podcast, interview): mostly faces, the occasional reference picture, few sounds.
+- **vlog**: action B-roll, quicker cuts, playful text, transitions only at real changes of place or time.
+- **tutorial**: zoom on the control being used, numbered steps, still and readable screenshots, no
+  decorative sound.
+- **story** (photo stories, celebrations, montages): their own playbook.
+
+Restraint ("do less") is the rule for the calmer styles only. Telling an informative edit to be restrained
+produced plain edits the owner rejected.
+
+### 12.2 The split screen is the default layout for informative edits
+- Most pictures and graphics show as a **split screen**: the picture or panel in one half (the top in 9:16,
+  one side in 16:9) and the speaker in the other half. Consecutive panels keep the speaker in place while the
+  panel changes on the next word. Go back to the full speaker between ideas and for opinions.
+- The speaker half is a **copy of the main clip at the same media time** (in-point = the media time at the
+  split's start, same speed, muted). It is cropped around the detected face (centre plus 6% downward, so the
+  chin and shoulders fit), and back-to-back copies merge into one layer. If the footage's shape differs from
+  the half by more than 1.25x, show the whole frame contained in the half rather than a tight crop.
+- No titles over a split; the frame is full.
+- Two pictures in the same half at the same time is a defect: send the plan back.
+
+### 12.3 Captions: one word at a time, on the split line
+- Add captions to informative edits by default: **one word at a time**, boxed preset, built from the
+  transcript's word times.
+- **Height**: during a top-and-bottom split, a caption sits **on the line between the halves (y = 0.5)**.
+  Otherwise it sits low. Decide this per caption, by whether a split is on screen when it starts.
+- **Grouping** (when showing more than one word): break at a pause over 0.6 s, at a sentence end, and at
+  **every edge of a range the plan's own cut removes**. Each caption then lies inside one kept piece, so the
+  cut keeps or drops it whole and its word times stay right. A caption runs on to the next one across gaps
+  under 0.5 s, and otherwise ends 0.25 s after its last word.
+- Titles treat the caption band as busy: never place a title over it while captions show.
+- The model only asks for captions (`{"op":"captions","words":1,"preset":"boxed"}`); code fills in the items.
+  Do not send the filled items back to the model in repair or revision prompts: thousands of tokens, and the
+  model starts copying them.
+
+### 12.4 Generated motion graphics, kept as reusable clips
+- An **explainer kit** of data-only specs, never code from the model: `stat` (count-up), `bars`, `checklist`,
+  `cards` (icon cards), `chapter`, `headline` (with a pill), `note` (a caveat).
+- Each spec says its frame (`panel` = half the screen, shown as a split with the speaker; `full` = the whole
+  screen) and its theme (studio, the default; night; paper). Copy only numbers and words that were spoken.
+- Every element carries `at` = the **word cue** it lands on, so items appear as they are named. The cue becomes
+  an offset inside the clip.
+- Rendered once with HyperFrames and GSAP (5 to 7 s per graphic on a laptop CPU), **cached by a hash of the spec**, and saved
+  to the project's media library as a normal video clip ("Graphic stat ..."). The user can reuse, move or
+  delete it like any upload.
+- Graphics are rendered **before planning**. The planner gets each one as a media id with its window and
+  placement, and must use it on its window with its rendered length intact.
+- Budget per style: informative allows about one graphic per 4 s of video (at most 14, 80% of the runtime);
+  other styles allow 0 to 2. Never the same kind twice in a row. A calculation said aloud becomes a checklist
+  of its steps as spoken.
+- If a graphic fails to render, the edit continues without it and says so.
+
+### 12.5 A deterministic finishing pass after planning (code, no tokens)
+Run these after the model's plan passes the checks, in this order:
+1. **Stills move**: a still photo with no motion gets one calm slow push (0.35); a document or scorecard
+   gets a gentler 0.3. No automatic punch-ins or zooms on the speaker: the owner called them unnecessary.
+2. **Entrance accents**: a quiet `click` (volume 0.3) on each picture or title entrance, at least 1.2 s apart.
+   A typewriter title gets `typing` instead, at most 3 per video. No whoosh; nothing in the first 3.5 s.
+   A sound tied to a photo the user has not supplied goes away if the photo is skipped.
+3. **Close gaps**: when two pictures in the finished edit are less than 0.5 s apart, the earlier one holds
+   (a video holds its last frame) until the next begins. A few frames of the plain shot between two panels
+   read as a flicker.
+4. **Panel dissolves**: a graphic or split picture that follows another picture fades in over it in 0.18 s,
+   with the earlier one held under it for the dissolve. One that starts from the plain speaker fades in
+   over 0.15 s. Leaving a split is a hard cut. Full photos and entrances the model chose itself stay as they
+   are. (This matched the reference edit frame by frame; slides and wipes across the split line break the
+   layout.)
+5. **Pairs**: when two examples fill complementary halves, bring the second in 0.3 s after the first, so the
+   speaker never shows in the empty half.
+
+### 12.6 Checks that send the plan back (one repair round each, then salvage)
+- **Rhythm**: in an informative edit, any stretch of the finished edit over 6.5 s with no picture (8 s for
+  the closing line) goes back once, with what is said in that stretch. Titles do not count as pictures.
+- **Coverage**: every picture moment the director planned must appear on its word cue, within 0.25 s.
+- **Do not let your own passes fight your checks.** Our pair alignment moved a photo off its word, the
+  coverage check then demanded it back, and the planner looped until the job failed. Whenever code moves
+  something, the checks must accept that move.
+- **Salvage instead of failing**: after the last repair, drop the ops the remaining issues name. Take the later
+  of two pictures sharing a place, and the last graphic over the budget. Then check again. Never drop more
+  than a third of the plan, and never all of it. A plan that fails only quality asks (rhythm, director
+  moments) ships as it is, with a note.
+- Log each rejected issue with any quoted user text replaced by `"..."`.
+
+### 12.7 Layout details that mattered
+- **Title search**: try every 1% of the height, nearest the chest band (0.72) first. Shrink to a floor of 4%
+  of the width, try the original, one-line and balanced two-line forms, and measure Indic vowel signs as
+  zero width.
+- A contained (full_fit) photo protects only its picture area. The blurred surround is free for titles.
+  Over a photo that has not been supplied yet, a title may use the top band (to y = 0.215) only on a backing
+  plate.
+- An overlay can crop to one panel of a multi-panel image, and carry a border `{width 6, white or accent}`
+  so it looks placed rather than pasted.
+
+### 12.8 Photo requests the user can skip
+- A request (a slot) names exactly what was said and is shown to the user in the review. The user fills it,
+  picks a library photo or skips it.
+- Ops that only make sense with that photo carry `needs: <slot>` and disappear when it is skipped, and the
+  edit still works without it. Related ops share a group, so the user ticks or unticks a whole moment, and
+  the applied edit is one undo.
+
+### 12.9 Transcription for Indian languages
+- Whisper loses long Telugu stretches. ElevenLabs Scribe v2 (through OpenRouter) returned full clips with
+  word times. Plan from the **original-language word cues** (`w` ids); a translation is only for text, never
+  for timing.
+- Find audible gaps (sound but no words) and transcribe them again. Mark low-confidence words with `?` in the
+  planner input, and never put a claim-specific picture or a number over speech the transcript missed.
+
+### 12.10 Cost, pausing and resuming
+- Record the provider's reported charge for every call (OpenRouter `usage.cost`) and show the rupee cost beside
+  the video name. Saved AI edits can be reopened, applied later or revised.
+- **Out of provider credits (HTTP 402)**: do not fail the job. Hand it back to the queue with a not-before time
+  (60 s, doubling to 16 min, giving up 3 days after it was queued), without spending an attempt. Show
+  "Paused: the AI provider is out of credits...".
+- **Journal every paid answer** with the job (step plus a SHA-256 of the whole request), and read it back on
+  resume. A paused or restarted job then pays only for calls it has not made. Delete the journal when the job
+  ends.
+
+### 12.11 Frame-accurate export (ffmpeg)
+Measured with a source whose every frame encodes its own number in its brightness:
+- **Clips on one frame grid**: clip i produces output frames `ceil(start*fps)` up to `ceil(end*fps)`
+  (`trim=end_frame=N`). Trimming each clip to its own fractional length lost or doubled a frame at every cut,
+  and the picture drifted from the sound. Put transition offsets and overlaps on the same grid.
+- **Overlays on whole frames**: start each overlay on the first frame at or after its time, placed with
+  `setpts=PTS-STARTPTS+K/(fps*TB)`. A time like `8.133333/TB` rounded onto the frame before. Move a video
+  overlay on by the remaining fraction of a frame.
+- **Exact reads**: read each picture from 2 frames before its in-point to 2 after its out-point, set its clock
+  to 0 at the in-point itself (not at its first decoded frame: `PTS-STARTPTS` after a trim shifts by up to a
+  frame), and use `fps=fps=N:start_time=0`. Trim the sound from the in-point exactly. Only then does a speaker
+  copy show the same frame as the main clip.
+- Keep clips on `settb=AVTB`: `concat` outputs that clock, and `xfade` needs both inputs on the same one.
+- A video overlay longer than its file holds its last frame (`tpad=stop_mode=clone`); with
+  `eof_action=pass` it would vanish early.
+- Test it: render cuts of fractional length, splits that start between frames and two transitions, then
+  read every output frame back. Expect no drops or doubles inside a piece, and every frame within one frame of
+  where the timeline says it comes from.
+
+### 12.12 Preview player
+- Mount overlays hidden and paused on their first frame **2.5 s before they start**. A graphic mounted only
+  at its start shows nothing while it loads, and the layer under it shows through: for a split, the
+  speaker's face twice.
+- When a video finishes loading while paused, move it to the current frame; nothing else will.
+
+### 12.13 Checklist additions
+- [ ] Style chosen from genre and purpose; only that style's rules were in the prompt.
+- [ ] Informative: split screens with a synced speaker copy, one-word captions on the split line.
+- [ ] Graphics are data-only specs on word cues, cached, saved as library clips, used with their full length.
+- [ ] Finishing pass ran (still motion, click accents, gaps under 0.5 s closed, panel dissolves).
+- [ ] No check can reject something your own code moved; salvage ran before any failure.
+- [ ] Export frame test passes: every frame accounted for, speaker copy in sync.
